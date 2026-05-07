@@ -70,6 +70,10 @@ SYSTEM_PROMPT = """너는 한국 보험설계사를 위한 카드뉴스 콘텐�
 7) 한 줄 요약
 8) CTA (저장/공유 유도, DM 유도 금지)
 
+title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용한다 (그 외 HTML 태그 금지).
+줄바꿈은 정말 의미 단위가 끊길 때만 1회, 길어야 2회. "A vs B" 같은 비교 표지에서만 권장.
+title 은 한 줄당 12~14자가 넘지 않도록 짧게 끊어 쓴다.
+
 출력은 반드시 JSON. 스키마:
 {
   "topic": "...",
@@ -196,9 +200,14 @@ def _esc(s: str) -> str:
 
 
 def _title_html(s: str) -> str:
-    """타이틀은 <em> 태그만 허용 (LLM이 강조 표시할 때 사용)."""
+    """타이틀은 <em> (강조) 와 <br> (줄바꿈) 만 허용."""
     safe = _esc(s)
     safe = safe.replace("&lt;em&gt;", "<em>").replace("&lt;/em&gt;", "</em>")
+    safe = (
+        safe.replace("&lt;br&gt;", "<br>")
+            .replace("&lt;br/&gt;", "<br>")
+            .replace("&lt;br /&gt;", "<br>")
+    )
     return safe
 
 

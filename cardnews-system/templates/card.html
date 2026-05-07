@@ -22,48 +22,50 @@
     color: var(--navy);
     font-family: 'Noto Sans KR', sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* 한글 가독성: 어절 단위 줄바꿈 + 긴 단어는 어디서든 끊을 수 있게 */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
 
   .card {
     position: relative;
     width: 1080px;
     height: 1080px;
-    padding: 88px 88px 0 88px;
+    padding: 96px 92px 0 92px;
     overflow: hidden;
   }
 
   /* 상단 라벨 */
   .eyebrow {
     display: inline-block;
-    padding: 10px 22px;
+    padding: 12px 24px;
     background: var(--navy);
     color: var(--gold);
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 700;
-    letter-spacing: 6px;
-    margin-bottom: 56px;
+    letter-spacing: 4px;
+    margin-bottom: 44px;
   }
 
   /* 페이지 인디케이터 */
   .page-indicator {
     position: absolute;
-    top: 88px;
-    right: 88px;
+    top: 96px;
+    right: 92px;
     font-family: 'Noto Serif KR', serif;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 700;
     color: var(--navy);
-    opacity: 0.55;
-    letter-spacing: 2px;
+    opacity: 0.5;
   }
 
   /* 메인 타이틀 */
   .title {
     font-family: 'Noto Serif KR', serif;
-    font-size: 88px;
+    font-size: 80px;
     font-weight: 900;
-    line-height: 1.18;
-    letter-spacing: -2px;
+    line-height: 1.28;
+    letter-spacing: -0.5px;
     color: var(--navy);
     margin-bottom: 36px;
   }
@@ -73,27 +75,32 @@
     border-bottom: 6px solid var(--gold);
     padding-bottom: 4px;
   }
+  .title br + em,
+  .title em + br { /* <br> 주변 강조 underline 잘림 방지 */
+    padding-bottom: 2px;
+  }
 
   /* 서브 카피 */
   .subtitle {
-    font-size: 34px;
+    font-size: 36px;
     font-weight: 500;
-    line-height: 1.5;
+    line-height: 1.6;
+    letter-spacing: -0.3px;
     color: #2a3a52;
-    margin-bottom: 48px;
+    margin-bottom: 44px;
   }
 
   /* Before / After 박스 */
   .ba {
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: 24px;
     margin-top: 12px;
   }
   .ba .row {
     background: #fff;
     border-left: 10px solid var(--gold);
-    padding: 28px 32px;
+    padding: 30px 34px;
     border-radius: 4px;
     box-shadow: 0 4px 18px rgba(10,22,40,0.06);
   }
@@ -101,15 +108,16 @@
   .ba .row .tag {
     font-size: 22px;
     font-weight: 800;
-    letter-spacing: 4px;
-    margin-bottom: 10px;
+    letter-spacing: 3px;
+    margin-bottom: 12px;
     color: var(--red);
   }
   .ba .row.after .tag { color: var(--gold); }
   .ba .row .line {
-    font-size: 30px;
+    font-size: 32px;
     font-weight: 500;
-    line-height: 1.45;
+    line-height: 1.6;
+    letter-spacing: -0.3px;
     color: var(--navy);
   }
 
@@ -119,18 +127,19 @@
   }
   .bullets li {
     list-style: none;
-    font-size: 32px;
+    font-size: 34px;
     font-weight: 500;
-    line-height: 1.55;
+    line-height: 1.7;
+    letter-spacing: -0.3px;
     color: var(--navy);
-    padding-left: 38px;
+    padding-left: 44px;
     position: relative;
-    margin-bottom: 16px;
+    margin-bottom: 22px;
   }
   .bullets li::before {
     content: "";
     position: absolute;
-    left: 0; top: 18px;
+    left: 0; top: 22px;
     width: 18px; height: 18px;
     background: var(--gold);
     transform: rotate(45deg);
@@ -140,19 +149,20 @@
   .ref {
     background: var(--navy);
     color: var(--cream);
-    padding: 28px 32px;
+    padding: 32px 36px;
     border-radius: 4px;
   }
   .ref .ref-tag {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    letter-spacing: 4px;
+    letter-spacing: 3px;
     color: var(--gold);
-    margin-bottom: 10px;
+    margin-bottom: 14px;
   }
   .ref .ref-body {
-    font-size: 28px;
-    line-height: 1.5;
+    font-size: 30px;
+    line-height: 1.6;
+    letter-spacing: -0.3px;
     font-weight: 500;
   }
 
@@ -209,7 +219,11 @@
     background: var(--navy);
     color: var(--cream);
   }
-  .card.cover .title { color: var(--cream); font-size: 104px; }
+  .card.cover .title {
+    color: var(--cream);
+    font-size: 92px;
+    line-height: 1.22;
+  }
   .card.cover .title em { color: var(--gold); border-bottom-color: var(--red); }
   .card.cover .subtitle { color: #d8d2c2; }
   .card.cover .eyebrow { background: var(--gold); color: var(--navy); }
