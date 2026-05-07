@@ -1,0 +1,6 @@
+git clone <cardnews-system-2 URL>
+cd cardnews-system-2
+mkdir -p output/2026-05-07/PM/approved
+git mv output/2026-05-07/PM/draft/*.png output/2026-05-07/PM/approved/
+git commit -m "approve 5/7 PM for smoke test"
+git push
