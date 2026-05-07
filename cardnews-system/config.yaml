@@ -1,8 +1,8 @@
 # 카드뉴스 자동화 설정
 brand:
   # ↓ 반드시 본인 이름 또는 개인 브랜드명으로 교체하세요. 소속 GA명 표기 금지.
-  name: "여기에 본인 이름"
-  meta: "@your_handle"
+  name: "보.보.분"
+  meta: "@bo.bo_bun"
 
 design:
   width: 1080
