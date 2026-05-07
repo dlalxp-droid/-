@@ -1,0 +1,45 @@
+name: Deploy cardnews to Pages
+
+# main 의 cardnews-system/output/** 가 바뀌면 Pages 로 자동 배포.
+# 결과 URL 은 https://<owner>.github.io/<repo>/cardnews/<date>/<slot>/<draft|approved>/NN.png
+# .env 의 PUBLIC_MEDIA_BASE_URL 은 https://<owner>.github.io/<repo>/cardnews 로 설정.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cardnews-system/output/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Build site tree
+        run: |
+          mkdir -p _site/cardnews
+          if [ -d cardnews-system/output ]; then
+            rsync -a --include='*/' --include='*.png' --exclude='*' \
+              cardnews-system/output/ _site/cardnews/
+          fi
+          # Meta 가 디렉터리 인덱스를 안 보지만 디버그용으로 index 생성
+          (cd _site && find cardnews -name '*.png' | sort > index.txt) || true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

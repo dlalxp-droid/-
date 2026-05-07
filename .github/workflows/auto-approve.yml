@@ -1,0 +1,68 @@
+name: Auto-approve cardnews (B-flow)
+
+# 게시 2.5h 전에 draft → approved 자동 승급.
+# rejected.flag 가 있는 슬롯은 스킵.
+#
+# AM 게시 KST 08:30 → 자동 승인 KST 06:00 = UTC 21:00 (전날)
+# PM 게시 KST 18:00 → 자동 승인 KST 15:30 = UTC 06:30 (당일)
+
+on:
+  schedule:
+    - cron: "0 21 * * *"   # KST 06:00 (AM 슬롯 승인)
+    - cron: "30 6 * * *"   # KST 15:30 (PM 슬롯 승인)
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "AM or PM"
+        required: true
+        type: choice
+        options: [AM, PM]
+      date:
+        description: "YYYY-MM-DD (비우면 오늘 KST)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve slot & date (KST)
+        id: ctx
+        run: |
+          if [ -n "${{ inputs.slot }}" ]; then
+            SLOT="${{ inputs.slot }}"
+          elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
+            SLOT="AM"
+          else
+            SLOT="PM"
+          fi
+          if [ -n "${{ inputs.date }}" ]; then
+            DATE="${{ inputs.date }}"
+          else
+            DATE=$(TZ=Asia/Seoul date +%F)
+          fi
+          echo "slot=$SLOT" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
+      - name: Run approve.py
+        run: python cardnews-system/approve.py --date "${{ steps.ctx.outputs.date }}" --slot "${{ steps.ctx.outputs.slot }}"
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cardnews-system/output/
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "auto-approve ${{ steps.ctx.outputs.date }} ${{ steps.ctx.outputs.slot }}"
+            git push
+          fi

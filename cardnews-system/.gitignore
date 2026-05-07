@@ -2,9 +2,9 @@
 .venv/
 __pycache__/
 *.pyc
-output/*/
-!output/.gitkeep
-captions/*.txt
-!captions/.gitkeep
+
+# 참고 자료(PDF 등)는 git에 안 올림
 input/*
 !input/.gitkeep
+
+# output/ 와 captions/ 는 cron / Pages 가 읽으므로 트래킹함

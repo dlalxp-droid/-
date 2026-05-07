@@ -1,0 +1,71 @@
+name: Publish cardnews to Instagram
+
+# 매일 KST 08:30 / 18:00 자동 발행.
+# scheduler.py 가 approved/ 폴더의 PNG들을 Meta Graph API 로 캐러셀 업로드.
+#
+# 필요한 GitHub secrets:
+#   META_ACCESS_TOKEN
+#   IG_USER_ID
+# 필요한 GitHub variables:
+#   PUBLIC_MEDIA_BASE_URL  (예: https://<owner>.github.io/<repo>/cardnews)
+
+on:
+  schedule:
+    - cron: "30 23 * * *"  # KST 08:30 (UTC 23:30 전날)
+    - cron: "0 9 * * *"    # KST 18:00 (UTC 09:00)
+  workflow_dispatch:
+    inputs:
+      slot:
+        required: true
+        type: choice
+        options: [AM, PM]
+      date:
+        required: false
+        type: string
+      dry_run:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r cardnews-system/requirements.txt
+
+      - name: Resolve slot & date
+        id: ctx
+        run: |
+          if [ -n "${{ inputs.slot }}" ]; then
+            SLOT="${{ inputs.slot }}"
+          elif [ "${{ github.event.schedule }}" = "30 23 * * *" ]; then
+            SLOT="AM"
+          else
+            SLOT="PM"
+          fi
+          if [ -n "${{ inputs.date }}" ]; then
+            DATE="${{ inputs.date }}"
+          else
+            DATE=$(TZ=Asia/Seoul date +%F)
+          fi
+          echo "slot=$SLOT" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
+      - name: Publish
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          PUBLIC_MEDIA_BASE_URL: ${{ vars.PUBLIC_MEDIA_BASE_URL }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+        run: |
+          ARGS="--slot ${{ steps.ctx.outputs.slot }} --date ${{ steps.ctx.outputs.date }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          python cardnews-system/scheduler.py $ARGS

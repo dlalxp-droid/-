@@ -47,8 +47,9 @@ def read_caption(captions_dir: Path, day: dt.date, slot: str) -> str:
 
 
 def public_urls_for(images: list[Path], day: dt.date, slot: str) -> list[str]:
+    # Pages 배포 구조와 동일: <base>/<date>/<slot>/approved/<filename>
     base = os.environ["PUBLIC_MEDIA_BASE_URL"].rstrip("/")
-    return [f"{base}/{day.isoformat()}/{slot}/{img.name}" for img in images]
+    return [f"{base}/{day.isoformat()}/{slot}/approved/{img.name}" for img in images]
 
 
 def _post(path: str, data: dict) -> dict:
