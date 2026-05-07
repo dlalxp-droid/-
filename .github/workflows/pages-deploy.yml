@@ -29,6 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          # Pages 가 비활성 상태일 때 자동 활성화 (Source: GitHub Actions).
+          # 한 번 켜진 후에는 idempotent.
+          enablement: true
       - name: Build site tree
         run: |
           mkdir -p _site/cardnews
