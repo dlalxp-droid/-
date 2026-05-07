@@ -1,0 +1,91 @@
+name: Generate cardnews
+
+# 수동 트리거. 일주일치(혹은 N일치) draft 카드뉴스를 생성해 main 에 push.
+# push 가 발생하면 pages-deploy.yml 이 GitHub Pages 로 자동 배포.
+#
+# 필요한 secrets (LLM 모드일 때): ANTHROPIC_API_KEY
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "주제 (보험 상담 화법 한정)"
+        required: true
+        default: "보험 상담 화법"
+        type: string
+      days:
+        description: "며칠치 생성"
+        required: true
+        default: "7"
+        type: string
+      slots:
+        description: "콤마구분 (AM,PM)"
+        required: true
+        default: "AM,PM"
+        type: string
+      start:
+        description: "시작일 YYYY-MM-DD (비우면 내일 KST)"
+        required: false
+        type: string
+      use_llm:
+        description: "Claude 사용 (false면 더미 콘텐츠로 파이프라인 검증)"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install -r cardnews-system/requirements.txt
+
+      - name: Install Chromium (Playwright)
+        run: python -m playwright install --with-deps chromium
+
+      - name: Resolve start date
+        id: ctx
+        run: |
+          if [ -n "${{ inputs.start }}" ]; then
+            START="${{ inputs.start }}"
+          else
+            START=$(TZ=Asia/Seoul date -d 'tomorrow' +%F)
+          fi
+          echo "start=$START" >> $GITHUB_OUTPUT
+
+      - name: Generate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TOPIC: ${{ inputs.topic }}
+          DAYS: ${{ inputs.days }}
+          SLOTS: ${{ inputs.slots }}
+          START: ${{ steps.ctx.outputs.start }}
+          USE_LLM: ${{ inputs.use_llm }}
+        run: |
+          if [ "$USE_LLM" = "true" ]; then
+            python cardnews-system/generate.py \
+              --topic "$TOPIC" --days "$DAYS" --slots "$SLOTS" --start "$START"
+          else
+            python cardnews-system/generate.py \
+              --topic "$TOPIC" --days "$DAYS" --slots "$SLOTS" --start "$START" --no-llm
+          fi
+
+      - name: Commit & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cardnews-system/output cardnews-system/captions
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "generate cardnews: ${{ steps.ctx.outputs.start }} +${{ inputs.days }}d (${{ inputs.slots }})"
+            git push
+          fi

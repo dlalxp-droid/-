@@ -27,6 +27,7 @@ cardnews-system/
 └── .env.example
 
 .github/workflows/
+├── generate-cardnews.yml   # (수동) 일주일치 draft 생성 후 push
 ├── pages-deploy.yml        # output/** 변경 시 GitHub Pages 자동 배포
 ├── auto-approve.yml        # KST 06:00 / 15:30 → draft → approved
 └── instagram-publish.yml   # KST 08:30 / 18:00 → 인스타 발행
@@ -123,8 +124,20 @@ python scheduler.py --slot AM --date 2026-05-08
 - 사인오프: 본인 명의 또는 개인 브랜드명만 사용. **소속 GA명 표기 금지.**
 - 의료자문/약관 인용이 필요한 주제는 사람 검수 후 수동 발행.
 
-## 5. 디자인 스펙 (고정)
+## 6. 첫 롤아웃 절차
 
-- 1080×1080 PNG, 카드 8~10장/세트
-- Navy `#0A1628` / Cream `#F5F1E8` / Gold `#C8A14B` / Red `#B8321A`
-- 하단 고정: `.bottom-stack { position: absolute; bottom: 74px; display: flex; flex-direction: column; gap: 16px; }`
+GitHub Actions의 cron은 **기본적으로 default 브랜치(main)** 에서만 도므로, 이 브랜치를 main에 머지한 뒤 아래 순서로 검증.
+
+1. **레포 설정 (한 번만)**
+   - Settings → **Pages** → Source: *GitHub Actions*
+   - Settings → Secrets and variables → Actions
+     - Secrets: `ANTHROPIC_API_KEY`, `META_ACCESS_TOKEN`, `IG_USER_ID`
+     - Variables: `PUBLIC_MEDIA_BASE_URL` = `https://<owner>.github.io/<repo>/cardnews`
+2. **첫 생성 (Actions → "Generate cardnews" → Run workflow)**
+   - 빠른 검증: `use_llm = false`, `days = 1`, `slots = AM` → 1세트 더미 PNG가 push됨
+   - 정상 생성: `use_llm = true`, `days = 7`, `slots = AM,PM`
+3. **Pages 배포 확인**: push 직후 "Deploy cardnews to Pages" 워크플로가 돌고, 끝나면 `https://<owner>.github.io/<repo>/cardnews/<date>/<slot>/draft/01.png` 로 미리보기.
+4. **검수**: 문제 슬롯만 `python reject.py --date X --slot AM` 후 push. 그대로 두면 게시 2.5h 전 자동 승인.
+5. **발행 dry-run**: Actions → "Publish cardnews to Instagram" → Run workflow → `dry_run = true`. 로그에서 빌드된 image_url 들 확인.
+6. **실발행 한 번**: 같은 워크플로를 `dry_run = false`로 한 번 → 인스타 피드에 캐러셀 게시 확인.
+7. 이후 cron이 매일 KST 06:00/15:30 자동 승인, 08:30/18:00 자동 발행.
