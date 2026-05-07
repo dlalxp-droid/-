@@ -92,8 +92,11 @@ title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용한다 (그 
       "title": "큰 제목. 핵심 단어는 <em>강조</em> 가능",
       "subtitle": "보조 카피 (없으면 빈 문자열)",
       "bullets": ["불릿1","불릿2"],            // 선택
-      "before": "Before 멘트",                 // kind=before/after 일 때
-      "after": "After 멘트",                   // kind=before/after 일 때
+      // kind=before 카드: "before" 만 채운다 (after 는 생략 또는 빈 문자열)
+      // kind=after  카드: "after"  만 채운다 (before 는 생략 또는 빈 문자열)
+      // 한 카드에 Before/After 를 같이 보여주고 싶을 때만 둘 다 채운다.
+      "before": "Before 멘트 (60자 이내)",
+      "after": "After 멘트 (60자 이내)",
       "ref_tag": "AUTHORITY",                  // kind=insight 일 때
       "ref_body": "심리학 근거 본문",           // kind=insight 일 때
       "swipe": "다음 페이지 유도 문구"
@@ -221,13 +224,24 @@ def _title_html(s: str) -> str:
 def _body_html(card: dict) -> str:
     kind = card.get("kind", "")
     if kind in ("before", "after"):
-        before = _esc(card.get("before", ""))
-        after  = _esc(card.get("after", ""))
-        return f"""
-        <div class="ba">
-          <div class="row before"><div class="tag">BEFORE</div><div class="line">{before}</div></div>
-          <div class="row after"><div class="tag">AFTER</div><div class="line">{after}</div></div>
-        </div>"""
+        before_text = (card.get("before") or "").strip()
+        after_text = (card.get("after") or "").strip()
+        # kind 가 명시한 쪽이 비어있고 반대쪽만 있으면 그 한 박스만 노출.
+        # 둘 다 채워져 있으면 양쪽, 둘 다 비면 빈 카드 방지로 박스 자체 생략.
+        rows: list[str] = []
+        if before_text:
+            rows.append(
+                '<div class="row before"><div class="tag">BEFORE</div>'
+                f'<div class="line">{_esc(before_text)}</div></div>'
+            )
+        if after_text:
+            rows.append(
+                '<div class="row after"><div class="tag">AFTER</div>'
+                f'<div class="line">{_esc(after_text)}</div></div>'
+            )
+        if not rows:
+            return ""
+        return '<div class="ba">' + "".join(rows) + "</div>"
     if kind == "insight":
         return f"""
         <div class="ref">
