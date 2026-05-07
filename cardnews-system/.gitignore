@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+output/*/
+!output/.gitkeep
+captions/*.txt
+!captions/.gitkeep
+input/*
+!input/.gitkeep

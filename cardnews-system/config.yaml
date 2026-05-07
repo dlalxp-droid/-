@@ -1,0 +1,51 @@
+# 카드뉴스 자동화 설정
+brand:
+  name: "본인 명의 / 개인 브랜드명"   # 소속 GA명 표기 금지
+  meta: "보험 상담 화법 노트"
+
+design:
+  width: 1080
+  height: 1080
+  cards_per_set_min: 8
+  cards_per_set_max: 10
+  colors:
+    navy: "#0A1628"
+    cream: "#F5F1E8"
+    gold:  "#C8A14B"
+    red:   "#B8321A"
+
+content:
+  topic: "보험 상담 화법"
+  exclude_topics:
+    - "보험금 청구"
+    - "보상 분쟁"
+    - "심사 거절 대응"
+    - "약관 해석"
+  structure:
+    - "문제 상황"
+    - "흔한 실수 멘트"
+    - "권장 화법(Before/After)"
+    - "심리학 근거(카네기/아들러/치알디니 1개)"
+    - "한 줄 요약"
+
+schedule:
+  slots:
+    AM: "08:30"
+    PM: "18:00"
+  timezone: "Asia/Seoul"
+
+llm:
+  provider: "anthropic"
+  model: "claude-opus-4-7"
+  max_tokens: 4096
+
+paths:
+  templates: "templates"
+  output: "output"
+  captions: "captions"
+  input: "input"
+
+upload:
+  platform: "instagram"
+  media_type: "CAROUSEL"
+  share_to_feed: true
