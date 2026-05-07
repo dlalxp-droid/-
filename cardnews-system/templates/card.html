@@ -74,6 +74,9 @@
     color: var(--red);
     border-bottom: 6px solid var(--gold);
     padding-bottom: 4px;
+    /* 강조구문은 통째로 한 줄 단위로 흐르게 — 두 줄에 걸쳐 underline 끊김 방지 */
+    display: inline-block;
+    white-space: nowrap;
   }
   .title br + em,
   .title em + br { /* <br> 주변 강조 underline 잘림 방지 */
@@ -114,9 +117,9 @@
   }
   .ba .row.after .tag { color: var(--gold); }
   .ba .row .line {
-    font-size: 32px;
+    font-size: 30px;
     font-weight: 500;
-    line-height: 1.6;
+    line-height: 1.55;
     letter-spacing: -0.3px;
     color: var(--navy);
   }
@@ -176,13 +179,20 @@
     flex-direction: column;
     gap: 16px;
   }
-  .swipe {
-    align-self: flex-end;
-    font-size: 24px;
+
+  /* 다음 페이지 안내 — 우상단 (page-indicator 아래)
+     본문 박스가 길어져도 겹치지 않도록 상단에 고정 */
+  .swipe-top {
+    position: absolute;
+    top: 142px;
+    right: 92px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--navy);
-    letter-spacing: 2px;
-    opacity: 0.7;
+    opacity: 0.65;
+    letter-spacing: 0.5px;
+    text-align: right;
+    max-width: 360px;
   }
   .signoff {
     border-top: 2px solid var(--navy);
@@ -231,11 +241,13 @@
   .card.cover .signoff .brand { color: var(--cream); }
   .card.cover .signoff .meta { color: #b8c2d2; }
   .card.cover .page-indicator { color: var(--cream); opacity: 0.6; }
+  .card.cover .swipe-top { color: var(--cream); opacity: 0.7; }
 </style>
 </head>
 <body>
   <div class="card {{COVER_CLASS}}">
     <div class="page-indicator">{{PAGE}} / {{TOTAL}}</div>
+    {{#SWIPE}}<div class="swipe-top">{{SWIPE}} →</div>{{/SWIPE}}
 
     {{#EYEBROW}}<div class="eyebrow">{{EYEBROW}}</div>{{/EYEBROW}}
 
@@ -245,7 +257,6 @@
     {{BODY_HTML}}
 
     <div class="bottom-stack">
-      {{#SWIPE}}<div class="swipe">{{SWIPE}} →</div>{{/SWIPE}}
       <div class="signoff">
         <span class="brand">{{BRAND}}</span>
         <span class="meta">{{META}}</span>
