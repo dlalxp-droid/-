@@ -117,6 +117,10 @@ python scheduler.py --slot AM --date 2026-05-08
 
 수동 트리거: GitHub repo → Actions → "Publish cardnews to Instagram" → Run workflow (slot 선택, dry_run 옵션).
 
+**자동 재시도 / 실패 알림**
+- Meta API 호출은 5xx · 429(rate limit) · 네트워크 예외에 대해 지수 백오프(2/4/8s)로 최대 3회 재시도. 토큰 만료(401) 같은 4xx는 재시도 무의미하므로 즉시 실패.
+- 발행 워크플로가 실패하면 자동으로 GitHub Issue가 열립니다 (`[publish-failure] YYYY-MM-DD AM/PM`). repo Notifications 설정을 켜두면 이메일로 받음. 해결 후 이슈를 닫으면 됩니다. dry-run 실패 시에는 이슈를 만들지 않습니다.
+
 ## 4. 콘텐츠 정책
 
 - **주제 자동 회전**: `config.yaml` 의 `content.topics` 풀(기본 16개)을 슬롯마다 회전하며 사용.

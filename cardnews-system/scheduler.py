@@ -52,11 +52,31 @@ def public_urls_for(images: list[Path], day: dt.date, slot: str) -> list[str]:
     return [f"{base}/{day.isoformat()}/{slot}/approved/{img.name}" for img in images]
 
 
-def _post(path: str, data: dict) -> dict:
-    r = requests.post(f"{GRAPH}{path}", data=data, timeout=60)
-    if not r.ok:
-        raise RuntimeError(f"Meta API error {r.status_code}: {r.text}")
-    return r.json()
+def _post(path: str, data: dict, max_attempts: int = 3) -> dict:
+    """Meta Graph API POST with exponential backoff (2s/4s/8s).
+
+    재시도 대상: 네트워크 예외, 5xx, 429 (rate limit).
+    재시도 안 함: 4xx (요청 자체가 잘못된 경우 - 토큰 만료/권한 부족 등).
+    """
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = requests.post(f"{GRAPH}{path}", data=data, timeout=60)
+        except requests.RequestException as e:
+            last_err = e
+        else:
+            if r.ok:
+                return r.json()
+            status = r.status_code
+            err = RuntimeError(f"Meta API {status}: {r.text}")
+            if status < 500 and status != 429:
+                # 토큰 만료/잘못된 요청은 재시도해도 같은 결과 → 즉시 raise
+                raise err
+            last_err = err
+        if attempt < max_attempts:
+            time.sleep(2 ** attempt)  # 2s, 4s, 8s
+    assert last_err is not None
+    raise last_err
 
 
 def _wait_until_finished(creation_id: str, token: str, timeout_s: int = 120) -> None:
