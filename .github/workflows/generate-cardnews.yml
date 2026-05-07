@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       topic:
-        description: "주제 (보험 상담 화법 한정)"
-        required: true
-        default: "보험 상담 화법"
+        description: "단일 토픽 강제 (비우면 config.content.topics 풀 회전)"
+        required: false
+        default: ""
         type: string
       days:
         description: "며칠치 생성"
@@ -70,13 +70,10 @@ jobs:
           START: ${{ steps.ctx.outputs.start }}
           USE_LLM: ${{ inputs.use_llm }}
         run: |
-          if [ "$USE_LLM" = "true" ]; then
-            python cardnews-system/generate.py \
-              --topic "$TOPIC" --days "$DAYS" --slots "$SLOTS" --start "$START"
-          else
-            python cardnews-system/generate.py \
-              --topic "$TOPIC" --days "$DAYS" --slots "$SLOTS" --start "$START" --no-llm
-          fi
+          ARGS=(--days "$DAYS" --slots "$SLOTS" --start "$START")
+          if [ -n "$TOPIC" ]; then ARGS+=(--topic "$TOPIC"); fi
+          if [ "$USE_LLM" != "true" ]; then ARGS+=(--no-llm); fi
+          python cardnews-system/generate.py "${ARGS[@]}"
 
       - name: Commit & push
         run: |

@@ -56,12 +56,16 @@ class CardSet:
 SYSTEM_PROMPT = """너는 한국 보험설계사를 위한 카드뉴스 콘텐츠 작가다.
 주제는 '보험 상담 화법'에 한정한다. 보험금 청구·심사·약관 해석·보상 분쟁은 절대 다루지 말 것.
 
+매 세트는 주어진 서브토픽의 고유한 각도로 작성한다. 다른 세트와 표현·예시·심리학 근거가
+겹치지 않도록 의식적으로 다른 후킹 문구·다른 사례·다른 권위자(카네기/아들러/치알디니/매슬로/카네만 등)
+를 선택할 것.
+
 각 세트는 8~10장 구조로, 다음을 반드시 포함한다:
-1) 표지 (강한 한 줄 후킹)
+1) 표지 (강한 한 줄 후킹 - 서브토픽이 즉시 드러나야 함)
 2) 문제 상황 (현장에서 자주 겪는 장면)
 3) 흔한 실수 멘트 (Before)
 4) 권장 화법 (After) - Before/After 대비
-5) 심리학 근거 1개 (카네기/아들러/치알디니/매슬로 등 중 1개)
+5) 심리학 근거 1개
 6) 실전 적용 팁 2~3개
 7) 한 줄 요약
 8) CTA (저장/공유 유도, DM 유도 금지)
@@ -88,12 +92,16 @@ SYSTEM_PROMPT = """너는 한국 보험설계사를 위한 카드뉴스 콘텐�
 """
 
 
-def call_llm(topic: str) -> dict:
+def call_llm(topic: str, recent_topics: list[str] | None = None) -> dict:
     """Claude에 카드뉴스 1세트 콘텐츠를 요청."""
     try:
         import anthropic
     except ImportError:
         raise RuntimeError("anthropic SDK가 필요합니다. pip install anthropic")
+
+    avoid = ""
+    if recent_topics:
+        avoid = "\n이미 이번 주에 다룬 주제(표현/예시 겹치지 마라): " + ", ".join(recent_topics)
 
     client = anthropic.Anthropic()
     msg = client.messages.create(
@@ -102,7 +110,7 @@ def call_llm(topic: str) -> dict:
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
-            "content": f"주제: {topic}\n8~10장의 카드뉴스 1세트를 위 JSON 스키마로 생성하라.",
+            "content": f"서브토픽: {topic}{avoid}\n8~10장의 카드뉴스 1세트를 위 JSON 스키마로 생성하라.",
         }],
     )
     text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
@@ -113,21 +121,23 @@ def call_llm(topic: str) -> dict:
     return json.loads(m.group(0))
 
 
-def dummy_payload(topic: str) -> dict:
-    """LLM 없이 동작 확인용 더미 콘텐츠."""
+def dummy_payload(topic: str, idx: int = 0) -> dict:
+    """LLM 없이 동작 확인용 더미 콘텐츠. topic 별로 표지가 달라집니다."""
+    eyebrow = f"TALK SCRIPT {idx+1:02d}"
+    cover_title = f"<em>{topic}</em>" if topic else "<em>보험 상담 화법</em>"
     return {
         "topic": topic,
         "caption": (
             f"[{topic}]\n"
-            "거절은 거부가 아니라 '아직 이해하지 못함'입니다.\n"
-            "현장에서 그대로 쓰는 멘트 8장 정리.\n\n"
+            "현장에서 그대로 쓰는 멘트 모음.\n"
+            "(* 더미 콘텐츠 — LLM 활성화 시 매 세트 새로 작성됩니다.)\n\n"
             "#보험설계사 #보험상담 #영업화법 #FC #GA #재무설계 #생명보험 #보험영업"
         ),
         "cards": [
             {"kind": "cover",
-             "eyebrow": "TALK SCRIPT 01",
-             "title": "“생각해볼게요”에<em>지지 않는 법</em>",
-             "subtitle": "거절은 거부가 아니라, 아직 이해하지 못한 신호입니다.",
+             "eyebrow": eyebrow,
+             "title": cover_title,
+             "subtitle": "현장에서 즉시 따라할 수 있는 실전 멘트 정리.",
              "swipe": "SWIPE"},
             {"kind": "problem",
              "eyebrow": "PROBLEM",
@@ -281,6 +291,9 @@ def payload_to_set(payload: dict) -> CardSet:
 def render_set(card_set: CardSet, out_dir: Path, brand_name: str, brand_meta: str) -> list[Path]:
     from playwright.sync_api import sync_playwright
 
+    brand_name = (brand_name or "").strip() or "Insurance Talk Notes"
+    brand_meta = (brand_meta or "").strip()
+
     template = (ROOT / "templates" / "card.html").read_text(encoding="utf-8")
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
@@ -318,22 +331,52 @@ def write_caption(captions_dir: Path, day: dt.date, slot: str, caption: str) -> 
     return p
 
 
-def generate_one(topic: str, day: dt.date, slot: str, cfg: dict, use_llm: bool) -> CardSet:
-    payload = call_llm(topic) if use_llm else dummy_payload(topic)
+def generate_one(
+    topic: str,
+    day: dt.date,
+    slot: str,
+    cfg: dict,
+    use_llm: bool,
+    idx: int = 0,
+    recent_topics: list[str] | None = None,
+) -> CardSet:
+    payload = call_llm(topic, recent_topics=recent_topics) if use_llm else dummy_payload(topic, idx=idx)
     card_set = payload_to_set(payload)
+    if not card_set.topic:
+        card_set.topic = topic
 
     out_base = ROOT / cfg["paths"]["output"]
     out = slot_dir(out_base, day, slot)
     render_set(card_set, out, cfg["brand"]["name"], cfg["brand"]["meta"])
 
     write_caption(ROOT / cfg["paths"]["captions"], day, slot, card_set.caption)
-    print(f"[OK] {day} {slot}  {len(card_set.cards)}장 → {out}")
+    print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) → {out}")
     return card_set
+
+
+def _resolve_topics(args, cfg: dict) -> list[str]:
+    if args.topic:
+        return [args.topic]
+    pool = cfg.get("content", {}).get("topics") or []
+    if pool:
+        return pool
+    return [cfg.get("content", {}).get("default_topic", "보험 상담 화법")]
+
+
+def _check_brand(cfg: dict) -> None:
+    name = (cfg.get("brand", {}).get("name") or "").strip()
+    if not name or "여기에" in name or "본인 명의" in name:
+        print(
+            f"[warn] config.yaml 의 brand.name 이 placeholder({name!r}) 입니다. "
+            "본인 이름/브랜드명으로 교체하세요.",
+            file=sys.stderr,
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--topic", default="보험 상담 화법")
+    parser.add_argument("--topic", default=None,
+                        help="단일 토픽 강제. 미지정 시 config.content.topics 풀 회전")
     parser.add_argument("--days", type=int, default=1, help="며칠치 생성 (기본 1)")
     parser.add_argument("--slots", default="AM", help="콤마구분: AM,PM")
     parser.add_argument("--start", default=None, help="시작일 YYYY-MM-DD (기본: 오늘)")
@@ -342,21 +385,29 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_config()
+    _check_brand(cfg)
     use_llm = not args.no_llm and bool(os.getenv("ANTHROPIC_API_KEY"))
     if not use_llm and not args.no_llm:
         print("[warn] ANTHROPIC_API_KEY 미설정 → 더미 콘텐츠로 진행", file=sys.stderr)
 
     today = dt.date.fromisoformat(args.start) if args.start else dt.date.today()
+    topics = _resolve_topics(args, cfg)
 
     if args.preview:
-        generate_one(args.topic, today, "AM", cfg, use_llm=use_llm)
+        generate_one(topics[0], today, "AM", cfg, use_llm=use_llm, idx=0)
         return 0
 
     slots = [s.strip() for s in args.slots.split(",") if s.strip()]
+    used: list[str] = []
+    idx = 0
     for d in range(args.days):
         day = today + dt.timedelta(days=d)
         for slot in slots:
-            generate_one(args.topic, day, slot, cfg, use_llm=use_llm)
+            topic = topics[idx % len(topics)]
+            generate_one(topic, day, slot, cfg, use_llm=use_llm, idx=idx,
+                         recent_topics=used[-6:] or None)
+            used.append(topic)
+            idx += 1
     return 0
 
 

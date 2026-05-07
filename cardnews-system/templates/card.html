@@ -176,21 +176,32 @@
   }
   .signoff {
     border-top: 2px solid var(--navy);
-    padding-top: 14px;
+    padding-top: 16px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    font-size: 22px;
+    align-items: baseline;
+    gap: 24px;
+    font-size: 24px;
+    min-height: 44px;
   }
   .signoff .brand {
     font-family: 'Noto Serif KR', serif;
     font-weight: 900;
-    letter-spacing: 2px;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: 0;
     color: var(--navy);
+    white-space: nowrap;
+    max-width: 65%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .signoff .meta {
     color: #5a6b80;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* 표지(cover) 변형 */
