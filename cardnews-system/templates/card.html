@@ -7,10 +7,10 @@
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
 
   :root {
-    --navy: #0A1628;
-    --cream: #F5F1E8;
-    --gold: #C8A14B;
-    --red: #B8321A;
+    --bg:     {{COLOR_BG}};
+    --ink:    {{COLOR_INK}};
+    --accent: {{COLOR_ACCENT}};
+    --pop:    {{COLOR_POP}};
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,8 +18,8 @@
   html, body {
     width: 1080px;
     height: 1080px;
-    background: var(--cream);
-    color: var(--navy);
+    background: var(--bg);
+    color: var(--ink);
     font-family: 'Noto Sans KR', sans-serif;
     -webkit-font-smoothing: antialiased;
     /* 한글 가독성: 어절 단위 줄바꿈 + 긴 단어는 어디서든 끊을 수 있게 */
@@ -39,8 +39,8 @@
   .eyebrow {
     display: inline-block;
     padding: 12px 24px;
-    background: var(--navy);
-    color: var(--gold);
+    background: var(--ink);
+    color: var(--accent);
     font-size: 24px;
     font-weight: 700;
     letter-spacing: 4px;
@@ -55,7 +55,7 @@
     font-family: 'Noto Serif KR', serif;
     font-size: 26px;
     font-weight: 700;
-    color: var(--navy);
+    color: var(--ink);
     opacity: 0.5;
   }
 
@@ -66,13 +66,13 @@
     font-weight: 900;
     line-height: 1.28;
     letter-spacing: -0.5px;
-    color: var(--navy);
+    color: var(--ink);
     margin-bottom: 36px;
   }
   .title em {
     font-style: normal;
-    color: var(--red);
-    border-bottom: 6px solid var(--gold);
+    color: var(--pop);
+    border-bottom: 6px solid var(--accent);
     padding-bottom: 4px;
     /* 강조구문은 통째로 한 줄 단위로 흐르게 — 두 줄에 걸쳐 underline 끊김 방지 */
     display: inline-block;
@@ -89,7 +89,8 @@
     font-weight: 500;
     line-height: 1.6;
     letter-spacing: -0.3px;
-    color: #2a3a52;
+    color: var(--ink);
+    opacity: 0.78;
     margin-bottom: 44px;
   }
 
@@ -102,26 +103,26 @@
   }
   .ba .row {
     background: #fff;
-    border-left: 10px solid var(--gold);
+    border-left: 10px solid var(--accent);
     padding: 30px 34px;
     border-radius: 4px;
     box-shadow: 0 4px 18px rgba(10,22,40,0.06);
   }
-  .ba .row.before { border-left-color: var(--red); }
+  .ba .row.before { border-left-color: var(--pop); }
   .ba .row .tag {
     font-size: 22px;
     font-weight: 800;
     letter-spacing: 3px;
     margin-bottom: 12px;
-    color: var(--red);
+    color: var(--pop);
   }
-  .ba .row.after .tag { color: var(--gold); }
+  .ba .row.after .tag { color: var(--accent); }
   .ba .row .line {
     font-size: 30px;
     font-weight: 500;
     line-height: 1.55;
     letter-spacing: -0.3px;
-    color: var(--navy);
+    color: var(--ink);
   }
 
   /* 본문 카피(불릿형) */
@@ -134,7 +135,7 @@
     font-weight: 500;
     line-height: 1.7;
     letter-spacing: -0.3px;
-    color: var(--navy);
+    color: var(--ink);
     padding-left: 44px;
     position: relative;
     margin-bottom: 22px;
@@ -144,14 +145,14 @@
     position: absolute;
     left: 0; top: 22px;
     width: 18px; height: 18px;
-    background: var(--gold);
+    background: var(--accent);
     transform: rotate(45deg);
   }
 
   /* 인용/근거 박스 */
   .ref {
-    background: var(--navy);
-    color: var(--cream);
+    background: var(--ink);
+    color: var(--bg);
     padding: 32px 36px;
     border-radius: 4px;
   }
@@ -159,7 +160,7 @@
     font-size: 22px;
     font-weight: 700;
     letter-spacing: 3px;
-    color: var(--gold);
+    color: var(--accent);
     margin-bottom: 14px;
   }
   .ref .ref-body {
@@ -188,14 +189,14 @@
     right: 92px;
     font-size: 22px;
     font-weight: 700;
-    color: var(--navy);
+    color: var(--ink);
     opacity: 0.65;
     letter-spacing: 0.5px;
     text-align: right;
     max-width: 360px;
   }
   .signoff {
-    border-top: 2px solid var(--navy);
+    border-top: 2px solid var(--ink);
     padding-top: 16px;
     display: flex;
     justify-content: space-between;
@@ -210,38 +211,66 @@
     font-size: 30px;
     line-height: 1.1;
     letter-spacing: 0;
-    color: var(--navy);
+    color: var(--ink);
     white-space: nowrap;
     max-width: 65%;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .signoff .meta {
-    color: #5a6b80;
+    color: var(--ink);
+    opacity: 0.55;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* 표지(cover) 변형 */
-  .card.cover {
-    background: var(--navy);
-    color: var(--cream);
+  /* ===================== 표지(cover) 변형 =====================
+     var-a: 짙은 잉크 풀배경 + 액센트 아이브로우 (기존)
+     var-b: 밝은 배경 + 두꺼운 액센트 프레임
+     var-c: 밝은 배경 + 상단 액센트 스트라이프 200px
+     cover 클래스 자체는 셋 다 공유. var-X 가 위를 오버라이드. */
+
+  /* var-a (default cover) */
+  .card.cover.var-a { background: var(--ink); color: var(--bg); }
+  .card.cover.var-a .title { color: var(--bg); font-size: 92px; line-height: 1.22; }
+  .card.cover.var-a .title em { color: var(--accent); border-bottom-color: var(--pop); }
+  .card.cover.var-a .subtitle { color: var(--bg); opacity: 0.78; }
+  .card.cover.var-a .eyebrow { background: var(--accent); color: var(--ink); }
+  .card.cover.var-a .signoff { border-top-color: var(--bg); }
+  .card.cover.var-a .signoff .brand { color: var(--bg); }
+  .card.cover.var-a .signoff .meta { color: var(--bg); opacity: 0.6; }
+  .card.cover.var-a .page-indicator { color: var(--bg); opacity: 0.6; }
+  .card.cover.var-a .swipe-top { color: var(--bg); opacity: 0.7; }
+
+  /* var-b (light + accent inset frame) — box-shadow trick: 28px bg gutter, 6px accent line */
+  .card.cover.var-b {
+    background: var(--bg);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 28px var(--bg), inset 0 0 0 34px var(--accent);
   }
-  .card.cover .title {
-    color: var(--cream);
-    font-size: 92px;
-    line-height: 1.22;
+  .card.cover.var-b .title { font-size: 92px; line-height: 1.22; }
+  .card.cover.var-b .title em { color: var(--pop); border-bottom-color: var(--accent); }
+  .card.cover.var-b .eyebrow { background: var(--ink); color: var(--accent); }
+
+  /* var-c (light + top accent stripe via gradient — 200px solid accent on top) */
+  .card.cover.var-c {
+    background: linear-gradient(
+      to bottom,
+      var(--accent) 0,
+      var(--accent) 200px,
+      var(--bg) 200px,
+      var(--bg) 100%
+    );
+    color: var(--ink);
+    padding-top: 244px;
   }
-  .card.cover .title em { color: var(--gold); border-bottom-color: var(--red); }
-  .card.cover .subtitle { color: #d8d2c2; }
-  .card.cover .eyebrow { background: var(--gold); color: var(--navy); }
-  .card.cover .signoff { border-top-color: var(--cream); }
-  .card.cover .signoff .brand { color: var(--cream); }
-  .card.cover .signoff .meta { color: #b8c2d2; }
-  .card.cover .page-indicator { color: var(--cream); opacity: 0.6; }
-  .card.cover .swipe-top { color: var(--cream); opacity: 0.7; }
+  .card.cover.var-c .page-indicator { color: var(--ink); opacity: 0.85; top: 70px; }
+  .card.cover.var-c .swipe-top { color: var(--ink); opacity: 0.85; top: 110px; }
+  .card.cover.var-c .eyebrow { background: var(--ink); color: var(--accent); margin-top: 0; }
+  .card.cover.var-c .title { font-size: 92px; line-height: 1.22; }
+  .card.cover.var-c .title em { color: var(--pop); border-bottom-color: var(--accent); }
 </style>
 </head>
 <body>
