@@ -443,8 +443,14 @@ def _palette_for_topic(cfg: dict, topic: str) -> dict | None:
 
 
 def _cover_variant_for_topic(cfg: dict, topic: str) -> str:
+    """variant 는 palette 가 한 바퀴 다 돈 뒤에야 바뀐다.
+    이렇게 해야 (palette, variant) 조합이 lcm 에 묶여 일찍 반복하는 걸 막고
+    palettes×variants 만큼의 unique 조합을 토픽 수만큼 순서대로 소진한다.
+    """
     variants = cfg.get("design", {}).get("cover_variants") or ["var-a"]
-    return variants[_topic_index(cfg, topic) % len(variants)]
+    palettes = cfg.get("design", {}).get("palettes") or []
+    np = max(len(palettes), 1)
+    return variants[(_topic_index(cfg, topic) // np) % len(variants)]
 
 
 def write_caption(captions_dir: Path, day: dt.date, slot: str, caption: str) -> Path:
