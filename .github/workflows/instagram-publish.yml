@@ -6,8 +6,7 @@ name: Publish cardnews to Instagram
 # 필요한 GitHub secrets:
 #   META_ACCESS_TOKEN
 #   IG_USER_ID
-# 필요한 GitHub variables:
-#   PUBLIC_MEDIA_BASE_URL  (예: https://<owner>.github.io/<repo>/cardnews)
+#   CLOUDINARY_URL  (cloudinary://<api_key>:<api_secret>@<cloud_name>)
 
 on:
   schedule:
@@ -65,7 +64,7 @@ jobs:
         env:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
-          PUBLIC_MEDIA_BASE_URL: ${{ vars.PUBLIC_MEDIA_BASE_URL }}
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
         run: |
           ARGS="--slot ${{ steps.ctx.outputs.slot }} --date ${{ steps.ctx.outputs.date }}"
@@ -89,8 +88,8 @@ jobs:
               '',
               '흔한 원인:',
               '1. `approved/` 폴더가 비어 있음 (auto-approve 가 안 돌았거나 rejected.flag 있음)',
-              '2. `META_ACCESS_TOKEN` 만료 (60일) → developers.facebook.com 에서 재발급 후 secret 갱신',
-              '3. `PUBLIC_MEDIA_BASE_URL` 의 PNG 가 외부에서 fetch 안 됨 (Pages 배포 실패)',
+              '2. `META_ACCESS_TOKEN` 무효 → 시스템 사용자 토큰 재발급 후 secret 갱신',
+              '3. `CLOUDINARY_URL` 무효/할당량 초과 → Cloudinary 콘솔에서 확인',
               '4. Meta API rate limit (지수 백오프 3회 자동 재시도 후에도 실패)',
               '',
               '워크플로 로그를 먼저 확인하세요. 해결되면 이 이슈를 닫으세요.',
