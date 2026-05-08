@@ -1,7 +1,7 @@
 name: Generate cardnews
 
 # 수동 트리거. 일주일치(혹은 N일치) draft 카드뉴스를 생성해 main 에 push.
-# push 가 발생하면 pages-deploy.yml 이 GitHub Pages 로 자동 배포.
+# 외부 호스팅은 발행 시점에 scheduler.py 가 Cloudinary 로 직접 업로드한다.
 #
 # 필요한 secrets (LLM 모드일 때): ANTHROPIC_API_KEY
 

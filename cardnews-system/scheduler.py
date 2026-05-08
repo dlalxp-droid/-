@@ -4,7 +4,7 @@
 흐름:
   1) /output/YYYY-MM-DD/{slot}/approved/  의 PNG들을 모은다
      (검수 후 draft → approved 로 이동된 것만 큐 진입)
-  2) 각 PNG의 PUBLIC_MEDIA_BASE_URL 기준 공개 URL을 만든다
+  2) 각 PNG를 Cloudinary 에 업로드해 secure_url 을 얻는다
      (Meta는 image_url 을 직접 fetch 하므로 외부 접근 가능 URL 필수)
   3) /{IG_USER_ID}/media 로 children 컨테이너 N개 생성 (is_carousel_item=true)
   4) /{IG_USER_ID}/media 로 캐러셀 컨테이너 1개 생성 (media_type=CAROUSEL, children=...)
@@ -23,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+import cloudinary
+import cloudinary.uploader
 import requests
 import yaml
 from dotenv import load_dotenv
@@ -31,6 +33,7 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 
 GRAPH = "https://graph.facebook.com/v21.0"
+CLOUDINARY_FOLDER = "cardnews"
 
 
 def load_config() -> dict:
@@ -46,10 +49,29 @@ def read_caption(captions_dir: Path, day: dt.date, slot: str) -> str:
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
 
-def public_urls_for(images: list[Path], day: dt.date, slot: str) -> list[str]:
-    # Pages 배포 구조와 동일: <base>/<date>/<slot>/approved/<filename>
-    base = os.environ["PUBLIC_MEDIA_BASE_URL"].rstrip("/")
-    return [f"{base}/{day.isoformat()}/{slot}/approved/{img.name}" for img in images]
+def upload_to_cloudinary(images: list[Path], day: dt.date, slot: str) -> list[str]:
+    """PNG 들을 Cloudinary 에 업로드하고 secure_url 리스트를 반환.
+
+    public_id 는 cardnews/<date>/<slot>/<stem> 으로 결정적 — 같은 슬롯을 다시
+    돌려도 덮어쓰기되어 멱등성을 가진다(Cloudinary 측에서 중복 자산이 안 쌓임).
+    SDK 는 CLOUDINARY_URL 환경변수에서 cloud_name/key/secret 을 자동 로드한다.
+    """
+    if not os.getenv("CLOUDINARY_URL"):
+        raise RuntimeError("CLOUDINARY_URL 환경변수가 비어 있음")
+    cloudinary.config(secure=True)
+
+    urls: list[str] = []
+    for img in images:
+        public_id = f"{CLOUDINARY_FOLDER}/{day.isoformat()}/{slot}/{img.stem}"
+        res = cloudinary.uploader.upload(
+            str(img),
+            public_id=public_id,
+            overwrite=True,
+            invalidate=True,
+            resource_type="image",
+        )
+        urls.append(res["secure_url"])
+    return urls
 
 
 def _post(path: str, data: dict, max_attempts: int = 3) -> dict:
@@ -159,16 +181,16 @@ def main() -> int:
         return 0
 
     caption = read_caption(ROOT / cfg["paths"]["captions"], day, args.slot)
-    urls = public_urls_for(images, day, args.slot)
 
     if args.dry_run:
-        print("[dry-run] 업로드 대상")
-        for u in urls:
-            print(" -", u)
+        print("[dry-run] Cloudinary 업로드 + 인스타 발행 대상")
+        for img in images:
+            print(" -", img)
         print("caption:", caption[:120])
         return 0
 
     try:
+        urls = upload_to_cloudinary(images, day, args.slot)
         media_id = upload_carousel(urls, caption)
         notify(f"[ok] {day} {args.slot} 업로드 완료 (media_id={media_id})")
     except Exception as e:

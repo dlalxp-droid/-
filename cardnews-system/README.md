@@ -28,9 +28,8 @@ cardnews-system/
 
 .github/workflows/
 ├── generate-cardnews.yml   # (수동) 일주일치 draft 생성 후 push
-├── pages-deploy.yml        # output/** 변경 시 GitHub Pages 자동 배포
 ├── auto-approve.yml        # KST 06:00 / 15:30 → draft → approved
-└── instagram-publish.yml   # KST 08:30 / 18:00 → 인스타 발행
+└── instagram-publish.yml   # KST 08:30 / 18:00 → Cloudinary 업로드 + 인스타 발행
 ```
 
 ## 2. 셋업
@@ -51,22 +50,27 @@ cp .env.example .env       # 토큰 채우기
 5. `IG_USER_ID` 조회: `GET /me/accounts` → page_id → `GET /{page_id}?fields=instagram_business_account`
 6. `.env`의 `META_ACCESS_TOKEN`, `IG_USER_ID` 채우기
 
-### 이미지 호스팅 — GitHub Pages (자동)
+### 이미지 호스팅 — Cloudinary
 
-Meta는 `image_url`을 직접 fetch 하므로 PNG가 외부 공개 URL이어야 함.
-이 레포는 `cardnews-system/output/**` 에 변경이 있으면 GitHub Actions(`pages-deploy.yml`)가
-**자동으로 GitHub Pages에 배포**한다.
+Meta는 `image_url` 을 직접 fetch 하므로 PNG가 외부 공개 URL이어야 함.
+`scheduler.py` 가 발행 직전에 `approved/` PNG들을 **Cloudinary 에 직접 업로드**해
+얻은 `secure_url` 을 그대로 Meta 캐러셀의 `image_url` 로 넘긴다.
+별도 정적 호스팅(GitHub Pages 등) 워크플로는 필요 없다.
 
-1. 레포 Settings → Pages → Build and deployment: **GitHub Actions** 선택
-2. 첫 푸시 후 Pages URL 확인 (예: `https://<owner>.github.io/<repo>/`)
-3. GitHub repo Settings → Secrets and variables → Actions
-   - **Variables**: `PUBLIC_MEDIA_BASE_URL = https://<owner>.github.io/<repo>/cardnews`
-   - **Secrets**: `META_ACCESS_TOKEN`, `IG_USER_ID` (선택: `NOTIFY_WEBHOOK_URL`)
+1. https://cloudinary.com 가입 후 Dashboard 의 **API Environment variable**
+   값(`cloudinary://<api_key>:<api_secret>@<cloud_name>`)을 복사
+2. GitHub repo Settings → Secrets and variables → Actions → **Secrets**
+   - `CLOUDINARY_URL` (위에서 복사한 값)
+   - `META_ACCESS_TOKEN`, `IG_USER_ID` (선택: `NOTIFY_WEBHOOK_URL`)
 
-배포된 PNG의 실제 URL 형태:
+업로드된 자산의 `public_id` 는 결정적으로 부여되어 같은 슬롯을 재실행해도 덮어쓰기된다:
 ```
-https://<owner>.github.io/<repo>/cardnews/<YYYY-MM-DD>/<AM|PM>/approved/01.png
+cardnews/<YYYY-MM-DD>/<AM|PM>/01
+cardnews/<YYYY-MM-DD>/<AM|PM>/02
+...
 ```
+Meta 가 fetch 하는 실제 URL 은 Cloudinary 가 반환한 `secure_url`
+(예: `https://res.cloudinary.com/<cloud>/image/upload/v.../cardnews/2026-05-08/AM/01.png`).
 
 ## 3. 사용법
 
@@ -84,7 +88,7 @@ python generate.py --days 7 --topic "보험 상담 화법" --slots AM,PM --start
 
 ### 검수 (B안 — 시간 기반 자동 승인)
 
-생성된 `draft/` PNG를 GitHub Pages 미리보기 또는 로컬에서 확인 후, **그대로 두면 자동 발행**된다.
+생성된 `draft/` PNG를 로컬(또는 GitHub UI 의 파일 뷰어)에서 확인 후, **그대로 두면 자동 발행**된다.
 문제가 있는 슬롯은 `reject.py`로 차단.
 
 ```bash
@@ -135,15 +139,13 @@ python scheduler.py --slot AM --date 2026-05-08
 GitHub Actions의 cron은 **기본적으로 default 브랜치(main)** 에서만 도므로, 이 브랜치를 main에 머지한 뒤 아래 순서로 검증.
 
 1. **레포 설정 (한 번만)**
-   - Settings → **Pages** → Source: *GitHub Actions*
-   - Settings → Secrets and variables → Actions
-     - Secrets: `ANTHROPIC_API_KEY`, `META_ACCESS_TOKEN`, `IG_USER_ID`
-     - Variables: `PUBLIC_MEDIA_BASE_URL` = `https://<owner>.github.io/<repo>/cardnews`
+   - Settings → Secrets and variables → Actions → Secrets:
+     `ANTHROPIC_API_KEY`, `META_ACCESS_TOKEN`, `IG_USER_ID`, `CLOUDINARY_URL`
 2. **첫 생성 (Actions → "Generate cardnews" → Run workflow)**
    - 빠른 검증: `use_llm = false`, `days = 1`, `slots = AM` → 1세트 더미 PNG가 push됨
    - 정상 생성: `use_llm = true`, `days = 7`, `slots = AM,PM`
-3. **Pages 배포 확인**: push 직후 "Deploy cardnews to Pages" 워크플로가 돌고, 끝나면 `https://<owner>.github.io/<repo>/cardnews/<date>/<slot>/draft/01.png` 로 미리보기.
+3. **draft 확인**: GitHub repo 의 `cardnews-system/output/<date>/<slot>/draft/` 에서 PNG 확인.
 4. **검수**: 문제 슬롯만 `python reject.py --date X --slot AM` 후 push. 그대로 두면 게시 2.5h 전 자동 승인.
-5. **발행 dry-run**: Actions → "Publish cardnews to Instagram" → Run workflow → `dry_run = true`. 로그에서 빌드된 image_url 들 확인.
-6. **실발행 한 번**: 같은 워크플로를 `dry_run = false`로 한 번 → 인스타 피드에 캐러셀 게시 확인.
+5. **발행 dry-run**: Actions → "Publish cardnews to Instagram" → Run workflow → `dry_run = true`. 로그에서 업로드 대상 PNG 목록 확인 (Cloudinary 호출은 발생하지 않음).
+6. **실발행 한 번**: 같은 워크플로를 `dry_run = false`로 한 번 → Cloudinary 에 자산이 올라가고 인스타 피드에 캐러셀 게시되는지 확인.
 7. 이후 cron이 매일 KST 06:00/15:30 자동 승인, 08:30/18:00 자동 발행.
