@@ -301,8 +301,21 @@ def _body_html(card: dict) -> str:
     return ""
 
 
-def render_card_html(template: str, spec: CardSpec, brand_name: str, brand_meta: str) -> str:
+DEFAULT_PALETTE = {
+    "bg": "#F5F1E8", "ink": "#0A1628", "accent": "#C8A14B", "pop": "#B8321A",
+}
+
+
+def render_card_html(
+    template: str,
+    spec: CardSpec,
+    brand_name: str,
+    brand_meta: str,
+    palette: dict | None = None,
+    cover_variant: str = "var-a",
+) -> str:
     """아주 단순한 mustache-lite 치환."""
+    p = {**DEFAULT_PALETTE, **(palette or {})}
     html = template
     repl = {
         "PAGE": str(spec.page),
@@ -314,7 +327,11 @@ def render_card_html(template: str, spec: CardSpec, brand_name: str, brand_meta:
         "SWIPE": _esc(spec.swipe),
         "BRAND": _esc(brand_name),
         "META": _esc(brand_meta),
-        "COVER_CLASS": "cover" if spec.cover else "",
+        "COVER_CLASS": f"cover {cover_variant}" if spec.cover else "",
+        "COLOR_BG": p["bg"],
+        "COLOR_INK": p["ink"],
+        "COLOR_ACCENT": p["accent"],
+        "COLOR_POP": p["pop"],
     }
 
     # 조건 블록 {{#KEY}} ... {{/KEY}}
@@ -364,7 +381,14 @@ def payload_to_set(payload: dict) -> CardSet:
 
 # ----------------------------- 렌더링 ------------------------------------
 
-def render_set(card_set: CardSet, out_dir: Path, brand_name: str, brand_meta: str) -> list[Path]:
+def render_set(
+    card_set: CardSet,
+    out_dir: Path,
+    brand_name: str,
+    brand_meta: str,
+    palette: dict | None = None,
+    cover_variant: str = "var-a",
+) -> list[Path]:
     from playwright.sync_api import sync_playwright
 
     brand_name = (brand_name or "").strip() or "Insurance Talk Notes"
@@ -380,7 +404,10 @@ def render_set(card_set: CardSet, out_dir: Path, brand_name: str, brand_meta: st
                                       device_scale_factor=2)
         page = context.new_page()
         for spec in card_set.cards:
-            html = render_card_html(template, spec, brand_name, brand_meta)
+            html = render_card_html(
+                template, spec, brand_name, brand_meta,
+                palette=palette, cover_variant=cover_variant,
+            )
             page.set_content(html, wait_until="networkidle")
             png_path = out_dir / f"{spec.page:02d}.png"
             page.screenshot(path=str(png_path), full_page=False, omit_background=False,
@@ -398,6 +425,26 @@ def load_config() -> dict:
 
 def slot_dir(base: Path, day: dt.date, slot: str) -> Path:
     return base / day.isoformat() / slot / "draft"
+
+
+def _topic_index(cfg: dict, topic: str) -> int:
+    """토픽 풀에서의 인덱스. 풀에 없으면 해시 기반 결정적 인덱스."""
+    pool = cfg.get("content", {}).get("topics") or []
+    if topic in pool:
+        return pool.index(topic)
+    return abs(hash(topic))
+
+
+def _palette_for_topic(cfg: dict, topic: str) -> dict | None:
+    palettes = cfg.get("design", {}).get("palettes") or []
+    if not palettes:
+        return None
+    return palettes[_topic_index(cfg, topic) % len(palettes)]
+
+
+def _cover_variant_for_topic(cfg: dict, topic: str) -> str:
+    variants = cfg.get("design", {}).get("cover_variants") or ["var-a"]
+    return variants[_topic_index(cfg, topic) % len(variants)]
 
 
 def write_caption(captions_dir: Path, day: dt.date, slot: str, caption: str) -> Path:
@@ -423,10 +470,17 @@ def generate_one(
 
     out_base = ROOT / cfg["paths"]["output"]
     out = slot_dir(out_base, day, slot)
-    render_set(card_set, out, cfg["brand"]["name"], cfg["brand"]["meta"])
+    palette = _palette_for_topic(cfg, topic)
+    cover_variant = _cover_variant_for_topic(cfg, topic)
+    render_set(
+        card_set, out, cfg["brand"]["name"], cfg["brand"]["meta"],
+        palette=palette, cover_variant=cover_variant,
+    )
 
     write_caption(ROOT / cfg["paths"]["captions"], day, slot, card_set.caption)
-    print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) → {out}")
+    palette_name = (palette or {}).get("name", "default")
+    print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) "
+          f"[{palette_name}/{cover_variant}] → {out}")
     return card_set
 
 
