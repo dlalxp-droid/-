@@ -48,10 +48,12 @@ def read_caption(captions_dir: Path, day: dt.date, slot: str) -> str:
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
 
-def public_urls_for(images: list[Path], day: dt.date, slot: str) -> list[str]:
+def upload_to_cloudinary(images: list[Path], day: dt.date, slot: str) -> list[str]:
     # Cloudinary에 업로드 → secure_url 반환. CLOUDINARY_URL 환경변수로 자동 설정됨.
     # public_id 를 cardnews/<date>/<slot>/<stem> 으로 고정 + overwrite=True 라
     # 같은 슬롯 재발행 시 같은 URL 로 덮어써서 캐시/링크 안정.
+    if not os.getenv("CLOUDINARY_URL"):
+        raise RuntimeError("CLOUDINARY_URL 환경변수가 비어 있음")
     cloudinary.config(secure=True)
     urls: list[str] = []
     for img in images:
@@ -173,7 +175,7 @@ def main() -> int:
         return 0
 
     caption = read_caption(ROOT / cfg["paths"]["captions"], day, args.slot)
-    urls = public_urls_for(images, day, args.slot)
+    urls = upload_to_cloudinary(images, day, args.slot)
 
     if args.dry_run:
         print("[dry-run] 업로드 대상")
