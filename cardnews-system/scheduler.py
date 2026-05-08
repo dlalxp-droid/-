@@ -23,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+import cloudinary
+import cloudinary.uploader
 import requests
 import yaml
 from dotenv import load_dotenv
@@ -47,9 +49,21 @@ def read_caption(captions_dir: Path, day: dt.date, slot: str) -> str:
 
 
 def public_urls_for(images: list[Path], day: dt.date, slot: str) -> list[str]:
-    # Pages 배포 구조와 동일: <base>/<date>/<slot>/approved/<filename>
-    base = os.environ["PUBLIC_MEDIA_BASE_URL"].rstrip("/")
-    return [f"{base}/{day.isoformat()}/{slot}/approved/{img.name}" for img in images]
+    # Cloudinary에 업로드 → secure_url 반환. CLOUDINARY_URL 환경변수로 자동 설정됨.
+    # public_id 를 cardnews/<date>/<slot>/<stem> 으로 고정 + overwrite=True 라
+    # 같은 슬롯 재발행 시 같은 URL 로 덮어써서 캐시/링크 안정.
+    cloudinary.config(secure=True)
+    urls: list[str] = []
+    for img in images:
+        res = cloudinary.uploader.upload(
+            str(img),
+            public_id=f"cardnews/{day.isoformat()}/{slot}/{img.stem}",
+            overwrite=True,
+            invalidate=True,
+            resource_type="image",
+        )
+        urls.append(res["secure_url"])
+    return urls
 
 
 def _post(path: str, data: dict, max_attempts: int = 3) -> dict:
