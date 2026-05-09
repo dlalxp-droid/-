@@ -2,6 +2,7 @@
 
 사용:
   python reject.py --date 2026-05-08 --slot AM --reason "보상 화법 들어감"
+  (slot 은 AM | NOON | PM)
 
 효과:
 - output/<date>/<slot>/rejected.flag 생성
@@ -20,7 +21,7 @@ ROOT = Path(__file__).resolve().parent
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--date", default=None)
-    p.add_argument("--slot", required=True, choices=["AM", "PM"])
+    p.add_argument("--slot", required=True, choices=["AM", "NOON", "PM"])
     p.add_argument("--reason", default="rejected")
     args = p.parse_args()
 

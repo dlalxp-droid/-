@@ -3,11 +3,11 @@
 
 - LLM(Claude)로 보험 상담 화법 콘텐츠를 생성
 - HTML 템플릿에 주입 후 Playwright로 1080x1080 PNG 캡처
-- /output/YYYY-MM-DD/{AM|PM}/draft/  에 저장 (검수 후 approved/ 로 이동해야 업로드 큐 진입)
+- /output/YYYY-MM-DD/{AM|NOON|PM}/draft/  에 저장 (검수 후 approved/ 로 이동해야 업로드 큐 진입)
 
 최소 동작 버전 사용 예:
     python generate.py --topic "거절 처리 화법" --preview
-    python generate.py --days 7 --topic "보험 상담 화법" --slots AM,PM
+    python generate.py --days 7 --topic "보험 상담 화법" --slots AM,NOON,PM
     python generate.py --topic "거절 처리 화법" --preview --no-llm   # LLM 없이 더미 콘텐츠로 1세트 렌더
 """
 from __future__ import annotations
@@ -514,7 +514,8 @@ def main() -> int:
     parser.add_argument("--topic", default=None,
                         help="단일 토픽 강제. 미지정 시 config.content.topics 풀 회전")
     parser.add_argument("--days", type=int, default=1, help="며칠치 생성 (기본 1)")
-    parser.add_argument("--slots", default="AM", help="콤마구분: AM,PM")
+    parser.add_argument("--slots", default="AM,NOON,PM",
+                        help="콤마구분: AM,NOON,PM")
     parser.add_argument("--start", default=None, help="시작일 YYYY-MM-DD (기본: 오늘)")
     parser.add_argument("--preview", action="store_true", help="오늘 AM 한 세트만 생성")
     parser.add_argument("--no-llm", action="store_true", help="더미 페이로드로 동작 확인")

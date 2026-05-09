@@ -11,8 +11,9 @@
   5) /{IG_USER_ID}/media_publish 로 publish
 
 cron 등록 예:
-  30 8 * * *  /usr/bin/python /cardnews-system/scheduler.py --slot AM
-   0 18 * * * /usr/bin/python /cardnews-system/scheduler.py --slot PM
+   0 9  * * * /usr/bin/python /cardnews-system/scheduler.py --slot AM
+   0 13 * * * /usr/bin/python /cardnews-system/scheduler.py --slot NOON
+   0 17 * * * /usr/bin/python /cardnews-system/scheduler.py --slot PM
 """
 from __future__ import annotations
 
@@ -155,7 +156,7 @@ def notify(msg: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--slot", required=True, choices=["AM", "PM"])
+    parser.add_argument("--slot", required=True, choices=["AM", "NOON", "PM"])
     parser.add_argument("--date", default=None, help="YYYY-MM-DD (기본: 오늘)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

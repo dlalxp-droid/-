@@ -97,8 +97,9 @@ content:
 
 schedule:
   slots:
-    AM: "08:30"
-    PM: "18:00"
+    AM:   "09:00"
+    NOON: "13:00"
+    PM:   "17:00"
   timezone: "Asia/Seoul"
 
 llm:
