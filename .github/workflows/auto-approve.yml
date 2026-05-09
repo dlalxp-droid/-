@@ -25,6 +25,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: cardnews-output-write
+  cancel-in-progress: false
+
 jobs:
   approve:
     runs-on: ubuntu-latest
@@ -62,7 +66,15 @@ jobs:
           git add cardnews-system/output/
           if git diff --cached --quiet; then
             echo "no changes"
-          else
-            git commit -m "auto-approve ${{ steps.ctx.outputs.date }} ${{ steps.ctx.outputs.slot }}"
-            git push
+            exit 0
           fi
+          git commit -m "auto-approve ${{ steps.ctx.outputs.date }} ${{ steps.ctx.outputs.slot }}"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "push failed (attempt $i/5), pulling --rebase"
+            git fetch origin "$GITHUB_REF_NAME"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            sleep $((i * 2))
+          done
+          echo "push failed after 5 attempts"
+          exit 1

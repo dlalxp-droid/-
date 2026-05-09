@@ -59,6 +59,33 @@ jobs:
           echo "slot=$SLOT" >> $GITHUB_OUTPUT
           echo "date=$DATE" >> $GITHUB_OUTPUT
 
+      - name: Wait for approved/ folder (auto-approve race buffer)
+        if: inputs.dry_run != true
+        run: |
+          DATE="${{ steps.ctx.outputs.date }}"
+          SLOT="${{ steps.ctx.outputs.slot }}"
+          SLOT_DIR="cardnews-system/output/$DATE/$SLOT"
+          DIR="$SLOT_DIR/approved"
+          for i in 1 2 3 4 5 6; do
+            git fetch origin "$GITHUB_REF_NAME" --quiet || true
+            git checkout "origin/$GITHUB_REF_NAME" -- cardnews-system/output 2>/dev/null || true
+            if [ -f "$SLOT_DIR/rejected.flag" ]; then
+              echo "rejected.flag present, scheduler.py will skip"
+              exit 0
+            fi
+            COUNT=0
+            if [ -d "$DIR" ]; then
+              COUNT=$(find "$DIR" -maxdepth 1 -name '*.png' | wc -l)
+            fi
+            if [ "$COUNT" -ge 3 ]; then
+              echo "ready: $COUNT images in $DIR"
+              exit 0
+            fi
+            echo "attempt $i/6: $COUNT images in $DIR, sleeping 30s"
+            sleep 30
+          done
+          echo "approved/ not ready after 3min, proceeding (scheduler will skip-and-notify)"
+
       - name: Publish
         id: publish
         env:
