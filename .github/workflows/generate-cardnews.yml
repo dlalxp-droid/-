@@ -19,9 +19,9 @@ on:
         default: "7"
         type: string
       slots:
-        description: "콤마구분 (AM,PM)"
+        description: "콤마구분 (AM,NOON,PM)"
         required: true
-        default: "AM,PM"
+        default: "AM,NOON,PM"
         type: string
       start:
         description: "시작일 YYYY-MM-DD (비우면 내일 KST)"

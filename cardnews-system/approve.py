@@ -46,7 +46,7 @@ def approve(day: dt.date, slot: str, force: bool = False) -> int:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--date", default=None, help="YYYY-MM-DD (기본: 오늘 KST)")
-    p.add_argument("--slot", required=True, choices=["AM", "PM"])
+    p.add_argument("--slot", required=True, choices=["AM", "NOON", "PM"])
     p.add_argument("--force", action="store_true", help="rejected.flag 무시")
     args = p.parse_args()
 

@@ -3,20 +3,22 @@ name: Auto-approve cardnews (B-flow)
 # 게시 2.5h 전에 draft → approved 자동 승급.
 # rejected.flag 가 있는 슬롯은 스킵.
 #
-# AM 게시 KST 08:30 → 자동 승인 KST 06:00 = UTC 21:00 (전날)
-# PM 게시 KST 18:00 → 자동 승인 KST 15:30 = UTC 06:30 (당일)
+# AM   게시 KST 09:00 → 자동 승인 KST 06:30 = UTC 21:30 (전날)
+# NOON 게시 KST 13:00 → 자동 승인 KST 10:30 = UTC 01:30 (당일)
+# PM   게시 KST 17:00 → 자동 승인 KST 14:30 = UTC 05:30 (당일)
 
 on:
   schedule:
-    - cron: "0 21 * * *"   # KST 06:00 (AM 슬롯 승인)
-    - cron: "30 6 * * *"   # KST 15:30 (PM 슬롯 승인)
+    - cron: "30 21 * * *"  # KST 06:30 (AM   슬롯 승인)
+    - cron: "30 1 * * *"   # KST 10:30 (NOON 슬롯 승인)
+    - cron: "30 5 * * *"   # KST 14:30 (PM   슬롯 승인)
   workflow_dispatch:
     inputs:
       slot:
-        description: "AM or PM"
+        description: "AM | NOON | PM"
         required: true
         type: choice
-        options: [AM, PM]
+        options: [AM, NOON, PM]
       date:
         description: "YYYY-MM-DD (비우면 오늘 KST)"
         required: false
@@ -43,8 +45,10 @@ jobs:
         run: |
           if [ -n "${{ inputs.slot }}" ]; then
             SLOT="${{ inputs.slot }}"
-          elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "30 21 * * *" ]; then
             SLOT="AM"
+          elif [ "${{ github.event.schedule }}" = "30 1 * * *" ]; then
+            SLOT="NOON"
           else
             SLOT="PM"
           fi
