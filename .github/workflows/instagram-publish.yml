@@ -27,8 +27,15 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+
+# 같은 슬롯이 동시에(혹은 짧은 간격으로 catch-up) 두 번 publish 되면 Meta 가
+# 중복 콘텐츠를 rate limit (code=4) 으로 차단한다. 트리거 단위로 직렬화하고,
+# 추가로 scheduler.py 에서 published.flag 로 idempotency 를 강제한다.
+concurrency:
+  group: cardnews-publish-${{ github.event.schedule || format('dispatch-{0}-{1}', inputs.date, inputs.slot) }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -115,6 +122,34 @@ jobs:
           ARGS="--slot ${{ steps.ctx.outputs.slot }} --date ${{ steps.ctx.outputs.date }}"
           if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           python cardnews-system/scheduler.py $ARGS
+
+      - name: Commit published.flag
+        if: success() && inputs.dry_run != true
+        run: |
+          DATE="${{ steps.ctx.outputs.date }}"
+          SLOT="${{ steps.ctx.outputs.slot }}"
+          FLAG="cardnews-system/output/$DATE/$SLOT/published.flag"
+          if [ ! -f "$FLAG" ]; then
+            echo "no flag (skip-and-notify path); nothing to commit"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FLAG"
+          if git diff --cached --quiet; then
+            echo "flag already committed"
+            exit 0
+          fi
+          git commit -m "publish: $DATE $SLOT"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "push failed (attempt $i/5), pulling --rebase"
+            git fetch origin "$GITHUB_REF_NAME"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            sleep $((i * 2))
+          done
+          echo "published successfully but failed to push flag — manual flag commit needed"
+          exit 1
 
       - name: Open issue on failure
         if: failure() && inputs.dry_run != true
