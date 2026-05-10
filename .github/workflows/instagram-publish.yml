@@ -62,32 +62,47 @@ jobs:
           echo "slot=$SLOT" >> $GITHUB_OUTPUT
           echo "date=$DATE" >> $GITHUB_OUTPUT
 
-      - name: Wait for approved/ folder (auto-approve race buffer)
+      - name: Ensure approved/ ready (inline-approve fallback)
         if: inputs.dry_run != true
         run: |
           DATE="${{ steps.ctx.outputs.date }}"
           SLOT="${{ steps.ctx.outputs.slot }}"
           SLOT_DIR="cardnews-system/output/$DATE/$SLOT"
-          DIR="$SLOT_DIR/approved"
-          for i in 1 2 3 4 5 6; do
-            git fetch origin "$GITHUB_REF_NAME" --quiet || true
-            git checkout "origin/$GITHUB_REF_NAME" -- cardnews-system/output 2>/dev/null || true
-            if [ -f "$SLOT_DIR/rejected.flag" ]; then
-              echo "rejected.flag present, scheduler.py will skip"
-              exit 0
-            fi
-            COUNT=0
-            if [ -d "$DIR" ]; then
-              COUNT=$(find "$DIR" -maxdepth 1 -name '*.png' | wc -l)
-            fi
-            if [ "$COUNT" -ge 3 ]; then
-              echo "ready: $COUNT images in $DIR"
-              exit 0
-            fi
-            echo "attempt $i/6: $COUNT images in $DIR, sleeping 30s"
-            sleep 30
-          done
-          echo "approved/ not ready after 3min, proceeding (scheduler will skip-and-notify)"
+          APPROVED="$SLOT_DIR/approved"
+          DRAFT="$SLOT_DIR/draft"
+
+          # auto-approve 워크플로가 이미 push 했을 수 있으니 항상 origin 최신 상태 반영.
+          git fetch origin "$GITHUB_REF_NAME" --quiet || true
+          git checkout "origin/$GITHUB_REF_NAME" -- cardnews-system/output 2>/dev/null || true
+
+          if [ -f "$SLOT_DIR/rejected.flag" ]; then
+            echo "rejected.flag present, scheduler.py will skip"
+            exit 0
+          fi
+
+          count_pngs() {
+            [ -d "$1" ] || { echo 0; return; }
+            find "$1" -maxdepth 1 -name '*.png' | wc -l
+          }
+
+          APPROVED_COUNT=$(count_pngs "$APPROVED")
+          if [ "$APPROVED_COUNT" -ge 3 ]; then
+            echo "ready: $APPROVED_COUNT images in $APPROVED"
+            exit 0
+          fi
+
+          # auto-approve cron 이 늦거나(GitHub Actions 스케줄러는 1~3시간 지연되는 경우가
+          # 흔함) 아직 안 돌았을 수 있다. draft 가 준비되어 있으면 인라인으로 승급해서
+          # publish 가 한 번에 끝나도록 한다. approve.py 는 idempotent 라 나중에
+          # auto-approve 가 늦게 깨어나도 안전.
+          DRAFT_COUNT=$(count_pngs "$DRAFT")
+          if [ "$DRAFT_COUNT" -ge 3 ]; then
+            echo "auto-approve not committed yet; running inline approve.py ($DRAFT_COUNT draft cards)"
+            python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
+            exit 0
+          fi
+
+          echo "neither approved/ nor draft/ ready ($APPROVED_COUNT approved, $DRAFT_COUNT draft); scheduler will skip-and-notify"
 
       - name: Publish
         id: publish
