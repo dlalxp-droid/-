@@ -44,6 +44,12 @@ def approved_dir(base: Path, day: dt.date, slot: str) -> Path:
     return base / day.isoformat() / slot / "approved"
 
 
+def published_flag(base: Path, day: dt.date, slot: str) -> Path:
+    # 발행 성공 시 기록하는 idempotency 마커. 같은 슬롯의 재실행(수동 re-run,
+    # cron 지연 catch-up, 동시 트리거)에서 Meta 로 중복 업로드되는 걸 막는다.
+    return base / day.isoformat() / slot / "published.flag"
+
+
 def read_caption(captions_dir: Path, day: dt.date, slot: str) -> str:
     p = captions_dir / f"{day.isoformat()}_{slot}.txt"
     return p.read_text(encoding="utf-8") if p.exists() else ""
@@ -170,6 +176,14 @@ def main() -> int:
         notify(f"[skip] {day} {args.slot}: approved 폴더 없음")
         return 0
 
+    flag = published_flag(out_base, day, args.slot)
+    if flag.exists() and not args.dry_run:
+        # 이미 발행된 슬롯. cron 지연 catch-up 이나 수동 re-run 으로 같은 슬롯이
+        # 두 번 호출되면 Meta 가 중복 콘텐츠로 차단(code=4 "Application request
+        # limit reached") → 멀쩡한 다음 슬롯까지 rate limit 에 걸린다.
+        notify(f"[skip] {day} {args.slot}: 이미 발행됨 ({flag.read_text(encoding='utf-8').strip()})")
+        return 0
+
     images = sorted(folder.glob("*.png"))
     if not (3 <= len(images) <= 10):
         notify(f"[skip] {day} {args.slot}: 캐러셀 매수 비정상 ({len(images)})")
@@ -187,10 +201,13 @@ def main() -> int:
 
     try:
         media_id = upload_carousel(urls, caption)
-        notify(f"[ok] {day} {args.slot} 업로드 완료 (media_id={media_id})")
     except Exception as e:
         notify(f"[fail] {day} {args.slot}: {e}")
         return 1
+
+    flag.write_text(f"media_id={media_id}\npublished_at={dt.datetime.utcnow().isoformat()}Z\n",
+                    encoding="utf-8")
+    notify(f"[ok] {day} {args.slot} 업로드 완료 (media_id={media_id})")
     return 0
 
 
