@@ -27,7 +27,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
@@ -99,6 +99,23 @@ jobs:
           if [ "$DRAFT_COUNT" -ge 3 ]; then
             echo "auto-approve not committed yet; running inline approve.py ($DRAFT_COUNT draft cards)"
             python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
+
+            # repo 상태도 동기화: auto-approve cron 이 늦거나 스킵된 경우에도
+            # 정오/PM 슬롯이 draft 로 남아있는 것처럼 보이는 문제 방지.
+            # push 실패해도 로컬 approved/ 는 살아있으니 publish 는 그대로 진행.
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add cardnews-system/output/
+            if ! git diff --cached --quiet; then
+              git commit -m "auto-approve $DATE $SLOT (inline via publish)"
+              for i in 1 2 3 4 5; do
+                if git push; then break; fi
+                echo "push failed (attempt $i/5), pulling --rebase"
+                git fetch origin "$GITHUB_REF_NAME" || true
+                git pull --rebase origin "$GITHUB_REF_NAME" || true
+                sleep $((i * 2))
+              done
+            fi
             exit 0
           fi
 
