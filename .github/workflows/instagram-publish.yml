@@ -3,16 +3,28 @@ name: Publish cardnews to Instagram
 # 매일 KST 09:00 / 13:00 / 17:00 자동 발행.
 # scheduler.py 가 approved/ 폴더의 PNG들을 Meta Graph API 로 캐러셀 업로드.
 #
+# 트리거 3종:
+#   1) schedule (cron)            — 정시. GitHub Actions cron 은 1~8시간 지연되는
+#                                    경우가 잦아서 단독으론 불안정.
+#   2) workflow_run (auto-approve) — auto-approve 워크플로 완료 시. cron 백업.
+#                                    이쪽이 트리거되면 오늘 모든 슬롯을 시간 게이트로
+#                                    체크해서 발행 시간이 된 것만 publish.
+#   3) workflow_dispatch          — 수동.
+#
 # 필요한 GitHub secrets:
 #   META_ACCESS_TOKEN
 #   IG_USER_ID
 #   CLOUDINARY_URL  (cloudinary://<api_key>:<api_secret>@<cloud_name>)
+#   NOTIFY_WEBHOOK_URL (선택)
 
 on:
   schedule:
     - cron: "0 0 * * *"    # KST 09:00 (UTC 00:00)
     - cron: "0 4 * * *"    # KST 13:00 (UTC 04:00)
     - cron: "0 8 * * *"    # KST 17:00 (UTC 08:00)
+  workflow_run:
+    workflows: ["Auto-approve cardnews (B-flow)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       slot:
@@ -30,15 +42,19 @@ permissions:
   contents: write
   issues: write
 
-# 같은 슬롯이 동시에(혹은 짧은 간격으로 catch-up) 두 번 publish 되면 Meta 가
-# 중복 콘텐츠를 rate limit (code=4) 으로 차단한다. 트리거 단위로 직렬화하고,
-# 추가로 scheduler.py 에서 published.flag 로 idempotency 를 강제한다.
+# 같은 슬롯이 동시(혹은 짧은 간격 catch-up)에 두 번 publish 되면 Meta 가 중복
+# 콘텐츠를 rate limit (code=4) 으로 차단한다. 트리거 종류 상관없이 publish 워크
+# 플로 전체를 단일 그룹으로 직렬화. 추가로 scheduler.py 의 published.flag 가
+# idempotency 를 강제하므로 큐에 밀린 두 번째 런은 즉시 skip 한다.
 concurrency:
-  group: cardnews-publish-${{ github.event.schedule || format('dispatch-{0}-{1}', inputs.date, inputs.slot) }}
+  group: cardnews-publish
   cancel-in-progress: false
 
 jobs:
   publish:
+    # workflow_run 은 상위 워크플로가 성공했을 때만 의미가 있다. 실패 시엔
+    # approved/ 상태도 의심스러우니 publish 도 건너뛴다.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,98 +65,138 @@ jobs:
       - name: Install deps
         run: pip install -r cardnews-system/requirements.txt
 
-      - name: Resolve slot & date
+      - name: Resolve date
         id: ctx
         run: |
-          if [ -n "${{ inputs.slot }}" ]; then
-            SLOT="${{ inputs.slot }}"
-          elif [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then
-            SLOT="AM"
-          elif [ "${{ github.event.schedule }}" = "0 4 * * *" ]; then
-            SLOT="NOON"
-          else
-            SLOT="PM"
-          fi
           if [ -n "${{ inputs.date }}" ]; then
             DATE="${{ inputs.date }}"
           else
             DATE=$(TZ=Asia/Seoul date +%F)
           fi
-          echo "slot=$SLOT" >> $GITHUB_OUTPUT
           echo "date=$DATE" >> $GITHUB_OUTPUT
 
-      - name: Ensure approved/ ready (inline-approve fallback)
-        if: inputs.dry_run != true
-        run: |
-          DATE="${{ steps.ctx.outputs.date }}"
-          SLOT="${{ steps.ctx.outputs.slot }}"
-          SLOT_DIR="cardnews-system/output/$DATE/$SLOT"
-          APPROVED="$SLOT_DIR/approved"
-          DRAFT="$SLOT_DIR/draft"
-
-          # auto-approve 워크플로가 이미 push 했을 수 있으니 항상 origin 최신 상태 반영.
-          git fetch origin "$GITHUB_REF_NAME" --quiet || true
-          git checkout "origin/$GITHUB_REF_NAME" -- cardnews-system/output 2>/dev/null || true
-
-          if [ -f "$SLOT_DIR/rejected.flag" ]; then
-            echo "rejected.flag present, scheduler.py will skip"
-            exit 0
-          fi
-
-          count_pngs() {
-            [ -d "$1" ] || { echo 0; return; }
-            find "$1" -maxdepth 1 -name '*.png' | wc -l
-          }
-
-          APPROVED_COUNT=$(count_pngs "$APPROVED")
-          if [ "$APPROVED_COUNT" -ge 3 ]; then
-            echo "ready: $APPROVED_COUNT images in $APPROVED"
-            exit 0
-          fi
-
-          # auto-approve cron 이 늦거나(GitHub Actions 스케줄러는 1~3시간 지연되는 경우가
-          # 흔함) 아직 안 돌았을 수 있다. draft 가 준비되어 있으면 인라인으로 승급해서
-          # publish 가 한 번에 끝나도록 한다. approve.py 는 idempotent 라 나중에
-          # auto-approve 가 늦게 깨어나도 안전.
-          DRAFT_COUNT=$(count_pngs "$DRAFT")
-          if [ "$DRAFT_COUNT" -ge 3 ]; then
-            echo "auto-approve not committed yet; running inline approve.py ($DRAFT_COUNT draft cards)"
-            python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
-            exit 0
-          fi
-
-          echo "neither approved/ nor draft/ ready ($APPROVED_COUNT approved, $DRAFT_COUNT draft); scheduler will skip-and-notify"
-
-      - name: Publish
-        id: publish
+      - name: Publish ready slots
+        id: pub
         env:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
         run: |
-          ARGS="--slot ${{ steps.ctx.outputs.slot }} --date ${{ steps.ctx.outputs.date }}"
-          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
-          python cardnews-system/scheduler.py $ARGS
+          set -u
+          DATE="${{ steps.ctx.outputs.date }}"
 
-      - name: Commit published.flag
-        if: success() && inputs.dry_run != true
+          # 트리거별로 처리할 슬롯 결정.
+          # - workflow_dispatch: inputs.slot 한 개
+          # - schedule: cron 매칭으로 한 개
+          # - workflow_run (auto-approve 완료): 오늘 모든 슬롯 (시간 게이트로 필터)
+          if [ -n "${{ inputs.slot }}" ]; then
+            SLOTS="${{ inputs.slot }}"
+          elif [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then
+            SLOTS="AM"
+          elif [ "${{ github.event.schedule }}" = "0 4 * * *" ]; then
+            SLOTS="NOON"
+          elif [ "${{ github.event.schedule }}" = "0 8 * * *" ]; then
+            SLOTS="PM"
+          else
+            SLOTS="AM NOON PM"
+          fi
+
+          DRY=""
+          [ "${{ inputs.dry_run }}" = "true" ] && DRY="--dry-run"
+
+          # origin 최신 상태로 output/ 동기화 — 직전에 끝난 auto-approve 의
+          # 커밋이나 다른 슬롯의 published.flag 를 반영.
+          git fetch origin "$GITHUB_REF_NAME" --quiet || true
+          git checkout "origin/$GITHUB_REF_NAME" -- cardnews-system/output 2>/dev/null || true
+
+          count_pngs() {
+            [ -d "$1" ] || { echo 0; return; }
+            find "$1" -maxdepth 1 -name '*.png' | wc -l
+          }
+
+          # KST 기준 현재 분 (시*60 + 분).
+          NOW_KST_MIN=$(( $(TZ=Asia/Seoul date +%-H) * 60 + $(TZ=Asia/Seoul date +%-M) ))
+
+          ATTEMPTED=""
+          FAILED=""
+          for SLOT in $SLOTS; do
+            SLOT_DIR="cardnews-system/output/$DATE/$SLOT"
+            mkdir -p "$SLOT_DIR"
+
+            # 슬롯 시간 30분 전부터만 발행 허용.
+            # workflow_run 트리거가 auto-approve 완료 시점에 fire 되면 슬롯 시간
+            # 보다 훨씬 일찍 호출될 수 있는데, 그 경우 이번 런에선 skip 하고
+            # 정시 cron 이나 같은 슬롯의 다음 workflow_run 이 받게 한다.
+            case "$SLOT" in
+              AM)   SLOT_MIN=540  ;;  # 09:00 = 540
+              NOON) SLOT_MIN=780  ;;  # 13:00 = 780
+              PM)   SLOT_MIN=1020 ;;  # 17:00 = 1020
+              *)
+                echo "[$SLOT] unknown slot; skip"
+                continue
+                ;;
+            esac
+            if [ "$NOW_KST_MIN" -lt $((SLOT_MIN - 30)) ]; then
+              KH=$((NOW_KST_MIN / 60))
+              KM=$((NOW_KST_MIN % 60))
+              echo "[$SLOT] not yet time (KST ${KH}:$(printf '%02d' $KM) < $((SLOT_MIN/60)):00-30min); skip"
+              continue
+            fi
+
+            if [ -f "$SLOT_DIR/published.flag" ]; then
+              echo "[$SLOT] already published; skip"
+              continue
+            fi
+            if [ -f "$SLOT_DIR/rejected.flag" ]; then
+              echo "[$SLOT] rejected.flag present; skip"
+              continue
+            fi
+
+            APPROVED=$(count_pngs "$SLOT_DIR/approved")
+            DRAFT=$(count_pngs "$SLOT_DIR/draft")
+            if [ "$APPROVED" -lt 3 ] && [ "$DRAFT" -ge 3 ]; then
+              echo "[$SLOT] auto-approve not yet committed; inline-approving $DRAFT cards"
+              python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
+              APPROVED=$(count_pngs "$SLOT_DIR/approved")
+            fi
+            if [ "$APPROVED" -lt 3 ]; then
+              echo "[$SLOT] neither approved nor draft has 3+ cards (approved=$APPROVED, draft=$DRAFT); skip"
+              continue
+            fi
+
+            ATTEMPTED="$ATTEMPTED $SLOT"
+            echo "[$SLOT] publishing..."
+            if ! python cardnews-system/scheduler.py --slot "$SLOT" --date "$DATE" $DRY; then
+              echo "[$SLOT] FAILED"
+              FAILED="$FAILED $SLOT"
+            fi
+          done
+
+          echo "attempted=${ATTEMPTED# }" >> $GITHUB_OUTPUT
+          echo "failed=${FAILED# }" >> $GITHUB_OUTPUT
+
+          if [ -n "$FAILED" ]; then
+            echo "Some slots failed:$FAILED"
+            exit 1
+          fi
+
+      - name: Commit published flags
+        # 발행 시도가 있었으면(성공이든 일부 실패든) 새로 생긴 published.flag 를
+        # origin 에 박아서 후속 트리거가 idempotent 하게 skip 할 수 있게 한다.
+        if: always() && inputs.dry_run != true && steps.pub.outputs.attempted != ''
         run: |
           DATE="${{ steps.ctx.outputs.date }}"
-          SLOT="${{ steps.ctx.outputs.slot }}"
-          FLAG="cardnews-system/output/$DATE/$SLOT/published.flag"
-          if [ ! -f "$FLAG" ]; then
-            echo "no flag (skip-and-notify path); nothing to commit"
-            exit 0
-          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$FLAG"
+          # 오늘 디렉토리만 staging (다른 변경 사이드이펙트 방지).
+          git add "cardnews-system/output/$DATE" 2>/dev/null || true
           if git diff --cached --quiet; then
-            echo "flag already committed"
+            echo "no flag changes to commit"
             exit 0
           fi
-          git commit -m "publish: $DATE $SLOT"
+          ATTEMPTED="${{ steps.pub.outputs.attempted }}"
+          git commit -m "publish: $DATE ($ATTEMPTED)"
           for i in 1 2 3 4 5; do
             if git push; then exit 0; fi
             echo "push failed (attempt $i/5), pulling --rebase"
@@ -157,13 +213,15 @@ jobs:
         with:
           script: |
             const date = '${{ steps.ctx.outputs.date }}';
-            const slot = '${{ steps.ctx.outputs.slot }}';
+            const attempted = '${{ steps.pub.outputs.attempted }}' || '(none)';
+            const failed = '${{ steps.pub.outputs.failed }}' || '(unknown — pre-publish step failed)';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
               '인스타 자동 업로드가 실패했습니다.',
               '',
               `- 일자: ${date}`,
-              `- 슬롯: ${slot}`,
+              `- 시도한 슬롯: ${attempted}`,
+              `- 실패한 슬롯: ${failed}`,
               `- 워크플로 실행 로그: ${runUrl}`,
               '',
               '흔한 원인:',
@@ -177,6 +235,6 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[publish-failure] ${date} ${slot}`,
+              title: `[publish-failure] ${date} (${failed})`,
               body,
             });
