@@ -125,6 +125,21 @@ def upload_carousel(image_urls: list[str], caption: str) -> str:
     token = os.environ["META_ACCESS_TOKEN"]
     ig_id = os.environ["IG_USER_ID"]
 
+    pre = requests.get(
+        f"{GRAPH}/{ig_id}",
+        params={"fields": "id,username", "access_token": token},
+        timeout=15,
+    )
+    if pre.status_code != 200:
+        body = pre.text[:400]
+        if '"code":190' in body:
+            hint = "META_ACCESS_TOKEN 만료/무효 — 토큰 재발급 필요"
+        elif '"error_subcode":33' in body or '"code":100' in body:
+            hint = "토큰이 IG_USER_ID에 접근 불가 — 페이지-IG 연결 또는 토큰 스코프(instagram_basic/instagram_content_publish) 확인"
+        else:
+            hint = "Graph API preflight 실패 — 토큰/ID/네트워크 점검"
+        raise SystemExit(f"[preflight] {hint}: HTTP {pre.status_code} {body}")
+
     children: list[str] = []
     for url in image_urls:
         res = _post(f"/{ig_id}/media", {
