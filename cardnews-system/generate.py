@@ -53,54 +53,15 @@ class CardSet:
 
 # ----------------------------- LLM 호출 -----------------------------------
 
-SYSTEM_PROMPT = """너는 한국 보험설계사를 위한 카드뉴스 콘텐츠 작가다.
+PROMPT_PREAMBLE = """너는 한국 보험설계사를 위한 카드뉴스 콘텐츠 작가다.
 주제는 '보험 상담 화법'에 한정한다. 보험금 청구·심사·약관 해석·보상 분쟁은 절대 다루지 말 것.
 
 매 세트는 주어진 서브토픽의 고유한 각도로 작성한다. 다른 세트와 표현·예시·심리학 근거가
 겹치지 않도록 의식적으로 다른 후킹 문구·다른 사례·다른 권위자(카네기/아들러/치알디니/매슬로/카네만 등)
 를 선택할 것.
+"""
 
-## 스토리 흐름 (반드시 결과 → 문제 → 해법 순서)
-
-독자가 마지막 장까지 스와이프하게 만드는 핵심은 "결과를 먼저 보여주고 어떻게 그렇게 됐는지를 늦게
-공개"하는 것이다. 첫 장에서 문제 상황부터 풀어쓰면 흥미가 빠르게 식는다.
-
-각 세트는 8~10장이며 다음 순서로 구성한다:
-
-1) cover    — 표지. 결과 티저(강한 한 줄). 어떤 변화/성과가 있었는지 암시만 하고 방법은 숨김.
-2) result   — 실제 일어난 결과 장면. 구체적 숫자/반응 포함. 아직 '왜'는 공개하지 말 것.
-3) tease    — "근데 시작은 정반대였다" 류 전환. 다음 장에서 문제를 공개한다고 예고.
-4) problem  — 그제야 현장 문제 상황 공개.
-5) before   — 흔한 실수 멘트(Before 한 줄).
-6) after    — 결과를 만든 권장 멘트(After 한 줄). Before와 대비.
-7) insight  — 왜 통했는지 심리학 근거 1개 (권위자 인용).
-8) tips     — 오늘 바로 써먹는 팁 2~3개.
-9) summary  — 한 줄 요약.
-10) cta     — 저장 + 댓글/공유 유도 (DM 유도 금지).
-
-8~9장으로 압축할 때는 result+tease 또는 summary+cta 를 한 장으로 합친다.
-어떤 경우에도 cover 다음에 problem 이 바로 오면 안 된다 — 반드시 result/tease 로 호기심을 유지한다.
-
-각 카드의 swipe 문구는 다음 장으로 넘기는 cliffhanger 역할:
-- result 뒤: "어떻게 가능했을까", "비결은…"
-- tease  뒤: "그 시작은…", "처음엔 정반대였다"
-- problem 뒤: "흔한 실수부터", "Before"
-- before 뒤: "그럼 어떻게?", "After"
-독자가 다음 장을 안 보면 손해라고 느끼게 짧고 강하게 쓴다.
-
-## 캡션 (Instagram caption)
-
-자연스러운 톤. 사무적·교과서적 문장 금지. 동료 설계사에게 말하듯 1인칭/공감체로 쓴다.
-이모지는 0~2개까지만, 과용 금지.
-
-구조 (각 블록 사이 빈 줄 1개):
-- 1줄 hook: 결과 티저 (표지와 같은 메시지를 다른 단어로). 끝에 "👇" 또는 "스와이프" 같은 유도 문구.
-- 2~3문장 본문: 현장 톤. "저도 처음엔…" 같은 1인칭 OK.
-- 댓글/공유 유도 한 줄: 구체 질문 + 저장/공유 권유.
-  예) "여러분은 이럴 때 어떤 멘트 쓰세요? 댓글로 공유 부탁해요 🙏 도움됐으면 동료 설계사에게도 보내주세요."
-- 해시태그 5~10개 (마지막 줄에만 모아쓰기).
-
-## 카드 표현 규칙
+PROMPT_CARD_RULES = """## 카드 표현 규칙
 
 title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용 (그 외 HTML 태그 금지).
 - title 은 한 줄당 12~14자 이내로 짧게 끊어 쓴다.
@@ -117,29 +78,99 @@ title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용 (그 외 HT
 
 {
   "topic": "...",
-  "caption": "위 구조의 인스타 캡션",
+  "caption": "위 캡션 톤 지침에 맞는 인스타 캡션",
   "cards": [
     {
-      "kind": "cover|result|tease|problem|before|after|insight|tips|summary|cta",
+      "kind": "위 스토리 흐름의 카드 종류 중 하나 (정확히 지정된 값 사용)",
       "eyebrow": "상단 라벨(짧게)",
       "title": "큰 제목. 핵심 단어는 <em>강조</em> 가능",
       "subtitle": "보조 카피 (없으면 빈 문자열)",
       "bullets": ["불릿1","불릿2"],            // 선택
-      // kind=before 카드: "before" 만 채운다 (after 는 생략 또는 빈 문자열)
-      // kind=after  카드: "after"  만 채운다 (before 는 생략 또는 빈 문자열)
-      // 한 카드에 Before/After 를 같이 보여주고 싶을 때만 둘 다 채운다.
-      "before": "Before 멘트 (60자 이내)",
-      "after": "After 멘트 (60자 이내)",
-      "ref_tag": "AUTHORITY",                  // kind=insight 일 때
-      "ref_body": "심리학 근거 본문",           // kind=insight 일 때
-      "swipe": "다음 페이지 유도 문구 (cliffhanger)"
+      "before": "Before 멘트 (60자 이내, 해당 kind 일 때)",
+      "after":  "After 멘트 (60자 이내, 해당 kind 일 때)",
+      "ref_tag": "AUTHORITY",                  // 권위자 인용 카드일 때
+      "ref_body": "심리학 근거 본문",           // 권위자 인용 카드일 때
+      "swipe":   "다음 페이지 유도 문구 (cliffhanger)"
     }
   ]
 }
 """
 
+_LEGACY_STORY_FLOW = """## 스토리 흐름 (결과 → 문제 → 해법 순)
 
-def call_llm(topic: str, recent_topics: list[str] | None = None) -> dict:
+각 세트는 다음 10장 순서로 구성한다 (kind 정확히 이대로):
+1) cover    — 결과 티저
+2) result   — 구체 수치/반응
+3) tease    — "근데 시작은 정반대였다"
+4) problem  — 현장 문제 공개
+5) before   — 흔한 실수 멘트
+6) after    — 권장 멘트
+7) insight  — 권위자(카네기/아들러/치알디니/매슬로/카네만) 1명 인용
+8) tips     — 실전 팁 2~3개
+9) summary  — 한 줄 요약
+10) cta     — 저장 + 댓글/공유 유도
+"""
+
+_LEGACY_CAPTION_SECTION = """## 캡션 (Instagram caption) — 1인칭 경험형
+
+자연스러운 톤. 사무적·교과서적 문장 금지. 동료 설계사에게 말하듯 1인칭/공감체.
+이모지는 0~2개까지만, 과용 금지.
+
+구조 (각 블록 사이 빈 줄 1개):
+- 1줄 hook: 결과 티저 + 끝에 "👇" 또는 "스와이프" 유도
+- 2~3문장 1인칭 회상 ("저도 처음엔…")
+- 댓글/저장/공유 유도 한 줄 (구체 질문 + 공유 권유)
+- 마지막 줄 해시태그 5~10개
+"""
+
+
+def _story_flow_section(structure: dict | None) -> str:
+    """config.content.story_structures 의 한 항목 → 프롬프트 블록."""
+    if not structure or not structure.get("cards"):
+        return _LEGACY_STORY_FLOW
+    cards = structure["cards"]
+    arc = (structure.get("arc") or "").strip()
+    label = structure.get("label") or structure.get("name") or "story"
+    card_list = "\n".join(f"{i+1}) {kind}" for i, kind in enumerate(cards))
+    return (
+        f"## 스토리 흐름 ({label})\n\n"
+        f"{arc}\n\n"
+        f"이번 세트는 다음 순서로 {len(cards)}장을 구성한다 (kind 값은 정확히 이대로 쓸 것):\n\n"
+        f"{card_list}\n\n"
+        "마지막 장은 항상 cta. 각 카드의 swipe 문구는 다음 장으로 넘기는 cliffhanger —\n"
+        "독자가 다음 장을 안 보면 손해라고 느끼게 짧고 강하게 쓴다.\n"
+    )
+
+
+def _caption_section(caption_style: dict | None) -> str:
+    """config.content.caption_styles 의 한 항목 → 프롬프트 블록."""
+    if not caption_style or not caption_style.get("template"):
+        return _LEGACY_CAPTION_SECTION
+    label = caption_style.get("label") or caption_style.get("name") or "caption"
+    template = caption_style["template"].rstrip()
+    return (
+        f"## 캡션 (Instagram caption) — {label}\n\n"
+        "자연스러운 톤. 사무적·교과서적 문장 금지. 동료 설계사에게 말하듯 1인칭/공감체.\n"
+        "이모지는 0~2개까지만, 과용 금지.\n\n"
+        "구조 (각 블록 사이 빈 줄 1개):\n"
+        f"{template}\n"
+    )
+
+
+def build_system_prompt(structure: dict | None = None,
+                        caption_style: dict | None = None) -> str:
+    return "\n".join([
+        PROMPT_PREAMBLE,
+        _story_flow_section(structure),
+        _caption_section(caption_style),
+        PROMPT_CARD_RULES,
+    ])
+
+
+def call_llm(topic: str,
+             recent_topics: list[str] | None = None,
+             structure: dict | None = None,
+             caption_style: dict | None = None) -> dict:
     """Claude에 카드뉴스 1세트 콘텐츠를 요청."""
     try:
         import anthropic
@@ -150,14 +181,19 @@ def call_llm(topic: str, recent_topics: list[str] | None = None) -> dict:
     if recent_topics:
         avoid = "\n이미 이번 주에 다룬 주제(표현/예시 겹치지 마라): " + ", ".join(recent_topics)
 
+    # 카드 수 = 구조에 정의된 길이 (없으면 8~10 범위 안내)
+    card_count_hint = "8~10장"
+    if structure and structure.get("cards"):
+        card_count_hint = f"{len(structure['cards'])}장"
+
     client = anthropic.Anthropic()
     msg = client.messages.create(
         model=os.getenv("LLM_MODEL", "claude-opus-4-7"),
         max_tokens=4096,
-        system=SYSTEM_PROMPT,
+        system=build_system_prompt(structure, caption_style),
         messages=[{
             "role": "user",
-            "content": f"서브토픽: {topic}{avoid}\n8~10장의 카드뉴스 1세트를 위 JSON 스키마로 생성하라.",
+            "content": f"서브토픽: {topic}{avoid}\n{card_count_hint}의 카드뉴스 1세트를 위 JSON 스키마로 생성하라.",
         }],
     )
     text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
@@ -453,6 +489,21 @@ def _cover_variant_for_topic(cfg: dict, topic: str) -> str:
     return variants[(_topic_index(cfg, topic) // np) % len(variants)]
 
 
+def _structure_for_idx(cfg: dict, idx: int) -> dict | None:
+    """슬롯 idx → 스토리 구조 1개. config 에 없으면 None (레거시 폴백)."""
+    structures = cfg.get("content", {}).get("story_structures") or []
+    if not structures:
+        return None
+    return structures[idx % len(structures)]
+
+
+def _caption_style_for_idx(cfg: dict, idx: int) -> dict | None:
+    styles = cfg.get("content", {}).get("caption_styles") or []
+    if not styles:
+        return None
+    return styles[idx % len(styles)]
+
+
 def write_caption(captions_dir: Path, day: dt.date, slot: str, caption: str) -> Path:
     captions_dir.mkdir(parents=True, exist_ok=True)
     p = captions_dir / f"{day.isoformat()}_{slot}.txt"
@@ -468,8 +519,14 @@ def generate_one(
     use_llm: bool,
     idx: int = 0,
     recent_topics: list[str] | None = None,
+    structure: dict | None = None,
+    caption_style: dict | None = None,
 ) -> CardSet:
-    payload = call_llm(topic, recent_topics=recent_topics) if use_llm else dummy_payload(topic, idx=idx)
+    if use_llm:
+        payload = call_llm(topic, recent_topics=recent_topics,
+                           structure=structure, caption_style=caption_style)
+    else:
+        payload = dummy_payload(topic, idx=idx)
     card_set = payload_to_set(payload)
     if not card_set.topic:
         card_set.topic = topic
@@ -541,8 +598,17 @@ def main() -> int:
         day = today + dt.timedelta(days=d)
         for slot in slots:
             topic = topics[idx % len(topics)]
+            structure = _structure_for_idx(cfg, idx)
+            caption_style = _caption_style_for_idx(cfg, idx)
+            print(
+                f"[gen] {day} {slot} topic={topic!r} "
+                f"structure={(structure or {}).get('name','legacy')} "
+                f"caption={(caption_style or {}).get('name','legacy')}",
+                file=sys.stderr,
+            )
             generate_one(topic, day, slot, cfg, use_llm=use_llm, idx=idx,
-                         recent_topics=used[-6:] or None)
+                         recent_topics=used[-6:] or None,
+                         structure=structure, caption_style=caption_style)
             used.append(topic)
             idx += 1
     return 0
