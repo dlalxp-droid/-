@@ -78,6 +78,13 @@ def mux_bgm(mp4_in: Path, bgm: Path | None, mp4_out: Path) -> None:
 # ----------------------------- Cloudinary --------------------------------
 
 def upload_video(mp4: Path, day: dt.date, slot: str) -> str:
+    """Cloudinary 에 비디오 업로드 → IG fetch 가능한 직배 MP4 URL 반환.
+
+    Meta error 2207077 ("Media upload has failed") 회피 위해:
+    1. eager transformation 으로 IG 호환 MP4 (h264/aac) 명시적 생성 + sync 대기
+    2. HEAD 요청으로 URL 실제 접근성 검증
+    3. CDN 전파 위해 추가 대기
+    """
     import cloudinary
     import cloudinary.uploader
     if not os.getenv("CLOUDINARY_URL"):
@@ -89,8 +96,35 @@ def upload_video(mp4: Path, day: dt.date, slot: str) -> str:
         overwrite=True,
         invalidate=True,
         resource_type="video",
+        format="mp4",
+        eager=[{
+            "format": "mp4",
+            "video_codec": "h264",
+            "audio_codec": "aac",
+        }],
+        eager_async=False,
     )
-    return res["secure_url"]
+    # eager URL 있으면 우선 사용 (IG 호환 보장된 derivative)
+    if res.get("eager"):
+        url = res["eager"][0]["secure_url"]
+    else:
+        url = res["secure_url"]
+
+    # CDN 전파 대기 (Meta 가 fetch 시도하기 전 모든 엣지에 도달하도록)
+    time.sleep(10)
+
+    # HEAD 검증: Meta 가 받게 될 응답이 정상인지 미리 확인
+    try:
+        h = requests.head(url, timeout=20, allow_redirects=True)
+        ct = h.headers.get("Content-Type", "")
+        cl = h.headers.get("Content-Length", "?")
+        print(f"  HEAD {url}: {h.status_code}, Content-Type={ct}, Content-Length={cl}")
+        if h.status_code != 200:
+            raise RuntimeError(f"Cloudinary URL not 200 (got {h.status_code}) — Meta 도 fetch 실패할 것")
+    except requests.RequestException as e:
+        print(f"  [warn] HEAD 실패: {e} — 그래도 IG 시도")
+
+    return url
 
 
 # ----------------------------- Graph API ---------------------------------
