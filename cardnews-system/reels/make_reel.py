@@ -24,9 +24,8 @@ DURATION = 15.0
 TOTAL_FRAMES = int(FPS * DURATION)
 
 
-# Phase 4 에서 caption + cardnews 데이터로부터 자동 추출하게 일반화 예정.
-# 우선 5/18 AM 만 손으로 매핑.
-SPECS: dict[tuple[str, str], ReelSpec] = {
+# 손으로 매핑한 spec 이 있으면 우선 사용. 없으면 LLM 으로 자동 생성.
+HARDCODED_SPECS: dict[tuple[str, str], ReelSpec] = {
     ("2026-05-18", "AM"): ReelSpec(
         category="부부 상담",
         headline=["남편 한마디에", "계약이 엎어진다"],
@@ -45,6 +44,16 @@ SPECS: dict[tuple[str, str], ReelSpec] = {
         cta="댓글 ‘정보’ 남기면 DM 드려요",
     ),
 }
+
+
+def _resolve_spec(date: str, slot: str) -> ReelSpec:
+    key = (date, slot)
+    if key in HARDCODED_SPECS:
+        print(f"using hardcoded spec for {key}")
+        return HARDCODED_SPECS[key]
+    print(f"generating spec via LLM for {date} {slot}")
+    from caption_to_spec import get_spec
+    return get_spec(date, slot)
 
 
 def render_all_frames(spec: ReelSpec, out_dir: Path) -> None:
@@ -85,11 +94,14 @@ def main() -> int:
     if len(date) == 8 and date.isdigit():
         date = f"{date[:4]}-{date[4:6]}-{date[6:]}"
     args.date = date
-    key = (date, args.slot)
-    if key not in SPECS:
-        print(f"no spec for {key} yet (caption_to_spec.py 작업 전)", file=sys.stderr)
+    try:
+        spec = _resolve_spec(date, args.slot)
+    except FileNotFoundError as e:
+        print(f"caption not found — 카드뉴스가 먼저 생성돼야 함: {e}", file=sys.stderr)
         return 2
-    spec = SPECS[key]
+    except Exception as e:
+        print(f"spec resolve 실패: {e}", file=sys.stderr)
+        return 2
 
     if args.out:
         mp4_out = Path(args.out)
