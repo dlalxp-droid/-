@@ -65,6 +65,17 @@ checklist: 각 항목 18자 이내
 category: 8자 이내
 bonus: 24자 이내 (보통 "*보장은 가입 조건·약관 따라 달라요" 같은 디스클레이머)
 
+## 톤 분류 (BGM 자동 매칭용)
+
+캡션의 주제·분위기를 보고 mood 한 단어 선택:
+- gentle    — 공감/따뜻함 ("같이 고민해보자" 톤)
+- calm      — 정보 전달 (담담한 설명)
+- serious   — 페인포인트/위기감 ("이거 놓치면 큰일")
+- uplifting — 희망/긍정 (성공 사례, 변화)
+- focused   — 전문가 톤 (분석, 데이터)
+- warm      — 인간미 (현장 이야기)
+- subtle    — 배경용 (잔잔한 팁 모음)
+
 ## 출력 JSON 스키마 (이것만 출력, 다른 텍스트 일체 금지)
 
 {
@@ -75,7 +86,8 @@ bonus: 24자 이내 (보통 "*보장은 가입 조건·약관 따라 달라요" 
   "red_lines":["...", "..."],
   "checklist":["...", "...", "...", "...", "..."],
   "bonus":    "*...",
-  "cta":      "댓글 '정보' 남기면 DM 드려요"
+  "cta":      "댓글 '정보' 남기면 DM 드려요",
+  "mood":     "gentle|calm|serious|uplifting|focused|warm|subtle 중 하나"
 }
 """
 
@@ -153,6 +165,7 @@ def generate_spec_from_caption(caption: str) -> ReelSpec:
         highlight_checks=2,
         bonus=data["bonus"],
         cta=data["cta"],
+        mood=data.get("mood", "warm"),
     )
 
 

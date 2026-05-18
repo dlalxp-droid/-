@@ -32,16 +32,35 @@ GRAPH = "https://graph.facebook.com/v21.0"
 
 # ----------------------------- BGM ----------------------------------------
 
-def _bgm_track_for(day: dt.date) -> Path | None:
-    """요일별 BGM 회전 (월~금 = 1~5, 주말은 1·2 재활용)."""
+VALID_MOODS = {"gentle", "calm", "serious", "uplifting", "focused", "warm", "subtle"}
+
+
+def _bgm_track_for_mood(mood: str) -> Path | None:
+    """mood 키워드로 BGM 선택. 없으면 fallback 순서대로 탐색."""
     bgm_dir = ROOT / "bgm"
     if not bgm_dir.exists():
         return None
-    idx = day.weekday()  # 월=0
-    if idx >= 5:
-        idx -= 5  # 토→1, 일→2
-    track = bgm_dir / f"track_{idx + 1}.mp3"
-    return track if track.exists() else None
+    if mood in VALID_MOODS:
+        primary = bgm_dir / f"track_{mood}.mp3"
+        if primary.exists():
+            return primary
+    # mood 매칭 실패 시 warm 또는 첫 트랙으로 폴백
+    for fallback_name in ("track_warm.mp3", "track_calm.mp3", "track_gentle.mp3"):
+        p = bgm_dir / fallback_name
+        if p.exists():
+            return p
+    tracks = sorted(bgm_dir.glob("track_*.mp3"))
+    return tracks[0] if tracks else None
+
+
+def _load_mood(out_dir: Path, slot: str) -> str:
+    """make_reel 이 저장한 mood 사이드카 읽기. 없으면 기본 'warm'."""
+    mood_file = out_dir / f"mood_{slot}.txt"
+    if mood_file.exists():
+        m = mood_file.read_text(encoding="utf-8").strip()
+        if m in VALID_MOODS:
+            return m
+    return "warm"
 
 
 def mux_bgm(mp4_in: Path, bgm: Path | None, mp4_out: Path) -> None:
@@ -271,10 +290,11 @@ def main() -> int:
         print(f"[skip] {args.date} {args.slot}: 이미 발행됨")
         return 0
 
-    # BGM 합성
-    bgm = _bgm_track_for(day)
+    # BGM 합성 — make_reel 이 저장한 mood 사이드카로 매칭
+    mood = _load_mood(out_dir, args.slot)
+    bgm = _bgm_track_for_mood(mood)
     final_mp4 = out_dir / f"reel_{args.slot}_final.mp4"
-    print(f"BGM: {bgm.name if bgm else 'silent'}")
+    print(f"BGM (mood={mood}): {bgm.name if bgm else 'silent'}")
     mux_bgm(mp4_in, bgm, final_mp4)
 
     caption = _build_reel_caption(args.date, args.slot)

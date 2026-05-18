@@ -112,13 +112,16 @@ def main() -> int:
 
     work_dir = Path(tempfile.mkdtemp(prefix="reel_frames_"))
     try:
-        print(f"rendering {TOTAL_FRAMES} frames")
+        print(f"rendering {TOTAL_FRAMES} frames (mood={spec.mood})")
         render_all_frames(spec, work_dir)
         print(f"encoding {mp4_out}")
         mp4_out.parent.mkdir(parents=True, exist_ok=True)
         encode_mp4(work_dir, mp4_out)
+        # publish 단계에서 BGM 매칭용 사이드카
+        mood_file = mp4_out.parent / f"mood_{args.slot}.txt"
+        mood_file.write_text(spec.mood, encoding="utf-8")
         size_kb = mp4_out.stat().st_size // 1024
-        print(f"OK: {mp4_out} ({size_kb} KB)")
+        print(f"OK: {mp4_out} ({size_kb} KB), mood saved to {mood_file.name}")
     finally:
         if not args.keep_frames:
             shutil.rmtree(work_dir, ignore_errors=True)

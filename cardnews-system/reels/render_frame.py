@@ -54,6 +54,9 @@ class ReelSpec:
     highlight_checks: int = 2
     bonus: str = ""
     cta: str = ""
+    # publish 단계에서 BGM 매칭에만 사용 (렌더에는 영향 없음).
+    # 허용: gentle, calm, serious, uplifting, focused, warm, subtle
+    mood: str = "warm"
 
 
 # ----------------------------- 타이밍 -------------------------------------
