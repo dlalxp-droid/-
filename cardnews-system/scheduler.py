@@ -135,10 +135,28 @@ def upload_carousel(image_urls: list[str], caption: str) -> str:
         if '"code":190' in body:
             hint = "META_ACCESS_TOKEN 만료/무효 — 토큰 재발급 필요"
         elif '"error_subcode":33' in body or '"code":100' in body:
-            hint = "토큰이 IG_USER_ID에 접근 불가 — 페이지-IG 연결 또는 토큰 스코프(instagram_basic/instagram_content_publish) 확인"
+            hint = "토큰이 IG_USER_ID 읽기 불가 — IG_USER_ID 값 오류 또는 instagram_basic 스코프 누락"
         else:
-            hint = "Graph API preflight 실패 — 토큰/ID/네트워크 점검"
-        raise SystemExit(f"[preflight] {hint}: HTTP {pre.status_code} {body}")
+            hint = "Graph API preflight (READ) 실패 — 토큰/ID/네트워크 점검"
+        raise SystemExit(f"[preflight-read] {hint}: HTTP {pre.status_code} {body}")
+
+    perm = requests.get(
+        f"{GRAPH}/me/permissions",
+        params={"access_token": token},
+        timeout=15,
+    )
+    if perm.status_code == 200:
+        granted = {p["permission"] for p in perm.json().get("data", []) if p.get("status") == "granted"}
+        required = {"instagram_basic", "instagram_content_publish", "pages_show_list"}
+        missing = required - granted
+        if missing:
+            raise SystemExit(
+                f"[preflight-scope] 발행에 필요한 스코프 누락: {sorted(missing)} — "
+                f"Graph API Explorer에서 해당 권한 체크 후 토큰 재발급. "
+                f"granted={sorted(granted)}"
+            )
+    else:
+        print(f"[preflight-scope] /me/permissions 조회 실패 (HTTP {perm.status_code}) — 스코프 확인 생략, publish 시도 진행")
 
     children: list[str] = []
     for url in image_urls:
