@@ -1,0 +1,148 @@
+name: Instagram Publish (Reels)
+
+# 매일 KST 13:00 (NOON) 에 자동 발행 + 수동 트리거.
+# 카드뉴스와 같은 단일 concurrency group → Meta rate limit 충돌 방지.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # UTC 04:00 = KST 13:00
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "발행 대상 날짜 (YYYY-MM-DD, 기본=오늘 KST)"
+        required: false
+        default: ""
+      slot:
+        description: "릴스 소스로 쓸 카드뉴스 슬롯"
+        required: false
+        default: "AM"
+        type: choice
+        options: ["AM", "NOON", "PM"]
+      dry_run:
+        description: "dry run (Cloudinary/IG 호출 안 함)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: cardnews-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  publish-reel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Install Python deps
+        run: |
+          pip install --quiet Pillow requests cloudinary python-dotenv pyyaml
+
+      - name: Resolve date/slot
+        id: ctx
+        run: |
+          DATE_IN="${{ inputs.date }}"
+          if [ -z "$DATE_IN" ]; then
+            DATE_IN=$(TZ=Asia/Seoul date +%F)
+          fi
+          SLOT_IN="${{ inputs.slot }}"
+          [ -z "$SLOT_IN" ] && SLOT_IN="AM"
+          echo "date=$DATE_IN"  >> $GITHUB_OUTPUT
+          echo "slot=$SLOT_IN"  >> $GITHUB_OUTPUT
+          echo "Target: $DATE_IN $SLOT_IN"
+
+      - name: Generate MP4
+        id: gen
+        run: |
+          set -e
+          DATE="${{ steps.ctx.outputs.date }}"
+          SLOT="${{ steps.ctx.outputs.slot }}"
+          REEL_DIR="cardnews-system/output/$DATE/REEL"
+          MP4="$REEL_DIR/reel_$SLOT.mp4"
+          if [ -f "$REEL_DIR/published_$SLOT.flag" ]; then
+            echo "already published; skip MP4 generation"
+            echo "skip=1" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if [ ! -f "$MP4" ]; then
+            echo "rendering reel MP4 for $DATE $SLOT"
+            python cardnews-system/reels/make_reel.py --date "$DATE" --slot "$SLOT"
+          else
+            echo "MP4 already exists: $MP4"
+          fi
+          ls -la "$REEL_DIR/"
+          echo "skip=0" >> $GITHUB_OUTPUT
+
+      - name: Publish to Instagram
+        if: steps.gen.outputs.skip != '1'
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          IG_USER_ID:        ${{ secrets.IG_USER_ID }}
+          CLOUDINARY_URL:    ${{ secrets.CLOUDINARY_URL }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+        run: |
+          DATE="${{ steps.ctx.outputs.date }}"
+          SLOT="${{ steps.ctx.outputs.slot }}"
+          DRY=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then DRY="--dry-run"; fi
+          python cardnews-system/reels/publish_reel.py --date "$DATE" --slot "$SLOT" $DRY
+
+      - name: Commit MP4 + published flag
+        if: always() && inputs.dry_run != true && steps.gen.outputs.skip != '1'
+        run: |
+          DATE="${{ steps.ctx.outputs.date }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "cardnews-system/output/$DATE/REEL" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git commit -m "publish reel: $DATE ${{ steps.ctx.outputs.slot }}"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "push failed (attempt $i/5), pulling --rebase"
+            git fetch origin "$GITHUB_REF_NAME"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            sleep $((i * 2))
+          done
+          echo "push failed after 5 retries — manual cleanup needed"
+          exit 1
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = '${{ steps.ctx.outputs.date }}';
+            const slot = '${{ steps.ctx.outputs.slot }}';
+            const url  = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[reel-publish] ${date} ${slot} 실패`,
+              body: [
+                `**시각:** ${new Date().toISOString()}`,
+                `**대상:** ${date} ${slot} 릴스`,
+                `**워크플로 로그:** ${url}`,
+                ``,
+                `자주 보는 원인:`,
+                `1. \`[preflight-scope]\` → 새 토큰에 instagram_content_publish 누락`,
+                `2. \`code:4 subcode:2207051\` → IG 행동 제한 (실제 발행 됐을 수 있음, 인스타 직접 확인)`,
+                `3. \`container ... ERROR\` → 영상 인코딩 실패 (Cloudinary URL 또는 영상 포맷 문제)`,
+              ].join("\n"),
+              labels: ["automation-failure", "reel"],
+            });
