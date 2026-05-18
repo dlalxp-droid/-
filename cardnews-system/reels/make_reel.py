@@ -81,7 +81,11 @@ def main() -> int:
     parser.add_argument("--keep-frames", action="store_true")
     args = parser.parse_args()
 
-    key = (args.date, args.slot)
+    date = args.date
+    if len(date) == 8 and date.isdigit():
+        date = f"{date[:4]}-{date[4:6]}-{date[6:]}"
+    args.date = date
+    key = (date, args.slot)
     if key not in SPECS:
         print(f"no spec for {key} yet (caption_to_spec.py 작업 전)", file=sys.stderr)
         return 2

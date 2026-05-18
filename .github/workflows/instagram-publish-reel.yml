@@ -58,6 +58,12 @@ jobs:
           if [ -z "$DATE_IN" ]; then
             DATE_IN=$(TZ=Asia/Seoul date +%F)
           fi
+          # YYYYMMDD → YYYY-MM-DD 정규화 (사용자가 대시 빼고 입력해도 동작)
+          case "$DATE_IN" in
+            [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+              DATE_IN="${DATE_IN:0:4}-${DATE_IN:4:2}-${DATE_IN:6:2}"
+              ;;
+          esac
           SLOT_IN="${{ inputs.slot }}"
           [ -z "$SLOT_IN" ] && SLOT_IN="AM"
           echo "date=$DATE_IN"  >> $GITHUB_OUTPUT

@@ -176,7 +176,11 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    day = dt.date.fromisoformat(args.date)
+    date_str = args.date
+    if len(date_str) == 8 and date_str.isdigit():
+        date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+    args.date = date_str
+    day = dt.date.fromisoformat(date_str)
     mp4_in = Path(args.mp4) if args.mp4 else (
         CARDNEWS_ROOT / "output" / args.date / "REEL" / f"reel_{args.slot}.mp4"
     )
