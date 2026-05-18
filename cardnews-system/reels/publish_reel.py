@@ -45,21 +45,33 @@ def _bgm_track_for(day: dt.date) -> Path | None:
 
 
 def mux_bgm(mp4_in: Path, bgm: Path | None, mp4_out: Path) -> None:
-    """BGM 없으면 그냥 복사. 있으면 ffmpeg 로 입혀서 페이드아웃."""
+    """BGM 합성. BGM 이 없어도 IG Reels API 가 무음 영상을 reject 하므로
+    무음 AAC 트랙이라도 반드시 채워준다."""
     if bgm is None:
-        shutil.copyfile(mp4_in, mp4_out)
-        return
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-i", str(mp4_in),
-        "-stream_loop", "-1", "-i", str(bgm),
-        "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "128k",
-        "-af", "afade=t=out:st=14:d=1,volume=0.6",
-        "-map", "0:v:0", "-map", "1:a:0",
-        "-shortest",
-        str(mp4_out),
-    ]
+        cmd = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(mp4_in),
+            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "128k",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(mp4_out),
+        ]
+    else:
+        cmd = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(mp4_in),
+            "-stream_loop", "-1", "-i", str(bgm),
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "128k",
+            "-af", "afade=t=out:st=14:d=1,volume=0.6",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(mp4_out),
+        ]
     subprocess.run(cmd, check=True)
 
 
@@ -119,17 +131,24 @@ def _preflight(token: str, ig_id: str) -> None:
 
 
 def _wait_finished(container_id: str, token: str, timeout_s: int = 300) -> None:
-    """REELS 컨테이너는 이미지보다 오래 걸린다(영상 인코딩). 최대 5분 대기."""
+    """REELS 컨테이너는 이미지보다 오래 걸린다(영상 인코딩). 최대 5분 대기.
+    ERROR 시 Meta 의 status 상세 메시지까지 raise 에 포함."""
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        r = requests.get(f"{GRAPH}/{container_id}",
-                         params={"fields": "status_code", "access_token": token}, timeout=30)
+        r = requests.get(
+            f"{GRAPH}/{container_id}",
+            params={"fields": "status_code,status", "access_token": token},
+            timeout=30,
+        )
         r.raise_for_status()
-        status = r.json().get("status_code")
-        if status == "FINISHED":
+        body = r.json()
+        status_code = body.get("status_code")
+        if status_code == "FINISHED":
             return
-        if status == "ERROR":
-            raise RuntimeError(f"container {container_id} ERROR")
+        if status_code == "ERROR":
+            raise RuntimeError(
+                f"container {container_id} ERROR — status='{body.get('status')}'"
+            )
         time.sleep(5)
     raise TimeoutError(f"container {container_id} not finished in {timeout_s}s")
 
