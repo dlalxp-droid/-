@@ -205,7 +205,31 @@ def publish_reel(video_url: str, caption: str) -> str:
         "creation_id": container["id"],
         "access_token": token,
     })
-    return pub["id"]
+    media_id = pub["id"]
+
+    # 사후 검증: media_publish 가 200 OK 응답해도 IG 가 백그라운드에서
+    # 게시물을 보류/리젝트 하는 경우가 있다. 직접 GET 해서 permalink 가
+    # 채워져 있는지 확인 → workflow 로그에 permalink 찍어서 즉시 검증 가능.
+    time.sleep(3)
+    try:
+        v = requests.get(
+            f"{GRAPH}/{media_id}",
+            params={
+                "fields": "id,media_type,media_product_type,permalink,timestamp",
+                "access_token": token,
+            },
+            timeout=20,
+        )
+        if v.status_code == 200:
+            j = v.json()
+            print(f"  verified: media_product_type={j.get('media_product_type')} "
+                  f"permalink={j.get('permalink')} timestamp={j.get('timestamp')}")
+        else:
+            print(f"  [warn] 발행 후 media_id 조회 실패 (HTTP {v.status_code}): {v.text[:200]}")
+    except requests.RequestException as e:
+        print(f"  [warn] 발행 후 검증 호출 실패: {e}")
+
+    return media_id
 
 
 # ----------------------------- 캡션 ---------------------------------------
