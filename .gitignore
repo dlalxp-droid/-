@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+.venv/
+venv/
+env/
+
+# Secrets — NEVER commit. 새 토큰/시크릿은 GitHub Actions Secrets 사용.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials*.json
+secrets.json
+service-account*.json
+client_secret*.json
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs / temp
+*.log
+tmp/
+.cache/

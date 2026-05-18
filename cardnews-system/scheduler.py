@@ -40,6 +40,48 @@ def load_config() -> dict:
     return yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
 
 
+def _verify_recent_publish(caption: str, lookback_min: int = 10) -> str | None:
+    """Meta API 4xx 응답 직후 IG /media 목록을 조회해 실제 게시 여부를 확인.
+
+    Meta 는 publish 처리가 끝났는데도 rate limit 계산 결과로 4xx (특히
+    code=4, subcode=2207051) 를 응답하는 경우가 있다. 그대로 두면
+    워크플로가 false-negative 로 실패 처리되어 cron/workflow_run 재시도가
+    같은 콘텐츠를 다시 publish → 중복 게시 → action block 악화.
+
+    caption 첫 줄(hook)이 lookback_min 분 이내 IG 게시물에 존재하면
+    "실제로는 발행됨" 으로 보고 media_id 반환.
+    """
+    token = os.environ.get("META_ACCESS_TOKEN")
+    ig_id = os.environ.get("IG_USER_ID")
+    if not token or not ig_id:
+        return None
+    hook = next((ln.strip() for ln in caption.splitlines() if ln.strip()), "")[:40]
+    if not hook:
+        return None
+    try:
+        r = requests.get(
+            f"{GRAPH}/{ig_id}/media",
+            params={"fields": "id,timestamp,caption", "limit": 5, "access_token": token},
+            timeout=15,
+        )
+    except requests.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=lookback_min)
+    for item in r.json().get("data", []):
+        ts = item.get("timestamp", "")
+        try:
+            posted = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if posted < cutoff:
+            continue
+        if hook in (item.get("caption") or ""):
+            return item.get("id")
+    return None
+
+
 def approved_dir(base: Path, day: dt.date, slot: str) -> Path:
     return base / day.isoformat() / slot / "approved"
 
@@ -235,8 +277,16 @@ def main() -> int:
     try:
         media_id = upload_carousel(urls, caption)
     except Exception as e:
-        notify(f"[fail] {day} {args.slot}: {e}")
-        return 1
+        verified_id = _verify_recent_publish(caption)
+        if verified_id:
+            media_id = verified_id
+            notify(
+                f"[ok-recovered] {day} {args.slot}: API 에러 무시 — IG에 게시 확인됨 "
+                f"(media_id={media_id}). 원에러: {e}"
+            )
+        else:
+            notify(f"[fail] {day} {args.slot}: {e}")
+            return 1
 
     flag.write_text(f"media_id={media_id}\npublished_at={dt.datetime.utcnow().isoformat()}Z\n",
                     encoding="utf-8")
