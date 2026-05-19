@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>card</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&display=swap');
+
+  @font-face {
+    font-family: 'Pretendard'; font-weight: 400;
+    src: url('{{FONT_BASE}}/Pretendard-Regular.otf') format('opentype');
+  }
+  @font-face {
+    font-family: 'Pretendard'; font-weight: 500;
+    src: url('{{FONT_BASE}}/Pretendard-Medium.otf') format('opentype');
+  }
+  @font-face {
+    font-family: 'Pretendard'; font-weight: 700;
+    src: url('{{FONT_BASE}}/Pretendard-Bold.otf') format('opentype');
+  }
+  @font-face {
+    font-family: 'Pretendard'; font-weight: 900;
+    src: url('{{FONT_BASE}}/Pretendard-Black.otf') format('opentype');
+  }
+
+  :root {
+    --bg:     {{COLOR_BG}};
+    --ink:    {{COLOR_INK}};
+    --accent: {{COLOR_ACCENT}};
+    --pop:    {{COLOR_POP}};
+    --gray:   #8a857a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 1080px; height: 1350px;
+    background: var(--bg); color: var(--ink);
+    font-family: 'Pretendard', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    word-break: keep-all; overflow-wrap: anywhere;
+  }
+
+  .card {
+    position: relative; width: 1080px; height: 1350px;
+    padding: 130px 100px 0 100px; overflow: hidden;
+  }
+
+  /* 상하단 신문 hairline */
+  .card::before, .card::after {
+    content: ""; position: absolute; left: 80px; right: 80px;
+    height: 2px; background: var(--ink);
+  }
+  .card::before { top: 110px; }
+  .card::after  { bottom: 110px; }
+
+  /* 상단 카테고리 / 호수 */
+  .top-meta {
+    text-align: center; margin-top: -34px; margin-bottom: 60px;
+  }
+  .top-meta .cat {
+    color: var(--accent); font-size: 24px; font-weight: 700;
+    letter-spacing: 4px; margin-bottom: 14px;
+  }
+  .top-meta .vol {
+    color: var(--gray); font-size: 22px; font-weight: 500; letter-spacing: 2px;
+  }
+
+  /* 페이지 인디케이터 */
+  .page-indicator {
+    position: absolute; bottom: 70px; right: 100px;
+    color: var(--gray); font-size: 22px; font-weight: 500;
+  }
+  .swipe-top {
+    position: absolute; top: 138px; right: 100px;
+    color: var(--gray); font-size: 22px; font-weight: 500;
+    max-width: 360px; text-align: right;
+  }
+
+  /* 메인 타이틀 */
+  .title {
+    font-family: 'Noto Serif KR', serif;
+    font-weight: 700; font-size: 76px; line-height: 1.28;
+    text-align: center; margin-bottom: 30px; color: var(--ink);
+  }
+  .title em {
+    font-style: normal; color: var(--accent); font-weight: 900;
+    border-bottom: 4px solid var(--accent); padding-bottom: 4px;
+    display: inline-block; white-space: nowrap;
+  }
+
+  /* 중앙 짧은 가로 마크 */
+  .title-mark {
+    display: block; width: 80px; height: 3px;
+    background: var(--accent); margin: 24px auto 36px;
+  }
+
+  /* 서브 카피 */
+  .subtitle {
+    text-align: center; color: var(--gray);
+    font-size: 32px; font-weight: 500; line-height: 1.6;
+    margin-bottom: 50px;
+  }
+
+  /* eyebrow 라벨 (cover 외 카드) */
+  .eyebrow {
+    display: inline-block; padding: 8px 22px;
+    background: transparent; color: var(--accent);
+    border: 2px solid var(--accent);
+    font-size: 22px; font-weight: 700; letter-spacing: 4px;
+    margin-bottom: 36px;
+  }
+
+  /* Before/After 박스 */
+  .ba { display: flex; flex-direction: column; gap: 22px; margin-top: 16px; }
+  .ba .row {
+    background: var(--bg); border-left: 6px solid var(--accent);
+    padding: 28px 32px;
+  }
+  .ba .row.before { border-left-color: var(--pop); }
+  .ba .row .tag {
+    font-size: 20px; font-weight: 700; letter-spacing: 3px;
+    color: var(--pop); margin-bottom: 10px;
+  }
+  .ba .row.after .tag { color: var(--accent); }
+  .ba .row .line {
+    font-size: 30px; line-height: 1.55; font-weight: 500; color: var(--ink);
+  }
+
+  /* 불릿 */
+  .bullets { margin-top: 12px; }
+  .bullets li {
+    list-style: none; font-size: 32px; line-height: 1.7; font-weight: 500;
+    padding-left: 44px; position: relative; margin-bottom: 18px;
+  }
+  .bullets li::before {
+    content: "—"; position: absolute; left: 0; top: 0;
+    color: var(--accent); font-weight: 900;
+  }
+
+  /* 인용/근거 박스 */
+  .ref {
+    background: transparent; border: 2px solid var(--ink);
+    padding: 32px 36px; margin-top: 12px;
+  }
+  .ref .ref-tag {
+    font-size: 20px; font-weight: 700; letter-spacing: 3px;
+    color: var(--accent); margin-bottom: 12px;
+  }
+  .ref .ref-body {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 30px; line-height: 1.6; font-weight: 500; color: var(--ink);
+  }
+
+  /* 하단 signoff */
+  .bottom-stack {
+    position: absolute; bottom: 130px; left: 100px; right: 100px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .signoff {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 24px; padding-top: 16px;
+  }
+  .signoff .brand {
+    font-family: 'Noto Serif KR', serif;
+    font-weight: 700; font-size: 28px; color: var(--ink);
+  }
+  .signoff .meta { color: var(--gray); font-size: 24px; font-weight: 500; }
+
+  /* ============= COVER 변형 ============= */
+  .card.cover {
+    padding-top: 200px;
+  }
+  .card.cover .title { font-size: 92px; }
+  .card.cover .subtitle { margin-bottom: 70px; }
+  .card.cover .bottom-stack { bottom: 150px; }
+</style>
+</head>
+<body>
+  <div class="card {{COVER_CLASS}}">
+    <div class="page-indicator">{{PAGE}} / {{TOTAL}}</div>
+    {{#SWIPE}}<div class="swipe-top">{{SWIPE}} →</div>{{/SWIPE}}
+
+    <div class="top-meta">
+      <div class="cat">INSURANCE · REPORT</div>
+      <div class="vol">VOL.{{PAGE}} / 2026</div>
+    </div>
+
+    {{#EYEBROW}}<div class="eyebrow">{{EYEBROW}}</div>{{/EYEBROW}}
+
+    {{#TITLE}}<h1 class="title">{{{TITLE}}}</h1>{{/TITLE}}
+    {{#TITLE}}<span class="title-mark"></span>{{/TITLE}}
+    {{#SUBTITLE}}<p class="subtitle">{{SUBTITLE}}</p>{{/SUBTITLE}}
+
+    {{BODY_HTML}}
+
+    <div class="bottom-stack">
+      <div class="signoff">
+        <span class="brand">{{BRAND}}</span>
+        <span class="meta">{{META}}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

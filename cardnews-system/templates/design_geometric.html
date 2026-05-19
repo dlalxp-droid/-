@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>card</title>
+<style>
+  @font-face { font-family: 'Pretendard'; font-weight: 400;
+    src: url('{{FONT_BASE}}/Pretendard-Regular.otf') format('opentype'); }
+  @font-face { font-family: 'Pretendard'; font-weight: 500;
+    src: url('{{FONT_BASE}}/Pretendard-Medium.otf') format('opentype'); }
+  @font-face { font-family: 'Pretendard'; font-weight: 700;
+    src: url('{{FONT_BASE}}/Pretendard-Bold.otf') format('opentype'); }
+  @font-face { font-family: 'Pretendard'; font-weight: 900;
+    src: url('{{FONT_BASE}}/Pretendard-Black.otf') format('opentype'); }
+
+  :root {
+    --bg:     {{COLOR_BG}};
+    --ink:    {{COLOR_INK}};
+    --accent: {{COLOR_ACCENT}};
+    --pop:    {{COLOR_POP}};
+    --shape3: {{COLOR_SHAPE3}};
+    --gray:   #6a675f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 1080px; height: 1350px;
+    background: var(--bg); color: var(--ink);
+    font-family: 'Pretendard', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    word-break: keep-all; overflow-wrap: anywhere;
+  }
+
+  .card {
+    position: relative; width: 1080px; height: 1350px;
+    padding: 380px 100px 0 100px; overflow: hidden;
+  }
+
+  /* 기하학 도형: 좌상단 원 + 우하단 큰 원 + 우상단 사각 */
+  .shape.top-left {
+    position: absolute; left: -100px; top: -100px;
+    width: 350px; height: 350px; border-radius: 50%;
+    background: var(--shape3);
+  }
+  .shape.bottom-right {
+    position: absolute; right: -120px; bottom: -120px;
+    width: 380px; height: 380px; border-radius: 50%;
+    background: var(--pop);
+  }
+  .shape.top-right {
+    position: absolute; right: 100px; top: 100px;
+    width: 130px; height: 130px;
+    background: var(--accent);
+  }
+
+  .page-indicator {
+    position: absolute; bottom: 80px; left: 100px;
+    color: var(--ink); font-weight: 900; font-size: 30px;
+  }
+  .swipe-top {
+    position: absolute; top: 280px; right: 100px;
+    color: var(--accent); font-size: 22px; font-weight: 700;
+    z-index: 5;
+  }
+
+  .eyebrow {
+    color: var(--accent); font-size: 28px; font-weight: 700;
+    letter-spacing: 1px; margin-bottom: 26px;
+  }
+
+  .title {
+    font-weight: 900; font-size: 72px; line-height: 1.22;
+    color: var(--ink); margin-bottom: 28px;
+  }
+  .title em {
+    font-style: normal; color: var(--pop); font-weight: 900;
+    display: inline-block; white-space: nowrap;
+  }
+  .title-mark {
+    display: block; width: 110px; height: 8px;
+    background: var(--accent); margin: 30px 0 36px;
+  }
+
+  .subtitle {
+    color: var(--ink); opacity: 0.78;
+    font-size: 30px; font-weight: 500; line-height: 1.6;
+    margin-bottom: 44px;
+  }
+
+  /* Before/After */
+  .ba { display: flex; flex-direction: column; gap: 22px; margin-top: 16px; }
+  .ba .row {
+    background: var(--ink); color: var(--bg);
+    padding: 28px 32px; border-radius: 4px;
+    position: relative;
+  }
+  .ba .row::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 12px; background: var(--accent);
+  }
+  .ba .row.before::before { background: var(--pop); }
+  .ba .row .tag {
+    font-size: 20px; font-weight: 900; letter-spacing: 4px;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  .ba .row.before .tag { color: var(--pop); }
+  .ba .row .line {
+    font-size: 28px; line-height: 1.55; font-weight: 500; color: var(--bg);
+  }
+
+  .bullets { margin-top: 12px; }
+  .bullets li {
+    list-style: none; font-size: 30px; line-height: 1.7; font-weight: 500;
+    color: var(--ink); padding-left: 48px; position: relative; margin-bottom: 18px;
+  }
+  .bullets li::before {
+    content: ""; position: absolute; left: 0; top: 20px;
+    width: 20px; height: 20px; background: var(--pop);
+  }
+
+  .ref {
+    background: var(--ink); color: var(--bg);
+    padding: 32px 36px; border-radius: 4px; margin-top: 12px;
+  }
+  .ref .ref-tag {
+    font-size: 20px; font-weight: 900; letter-spacing: 4px;
+    color: var(--accent); margin-bottom: 12px;
+  }
+  .ref .ref-body {
+    font-size: 28px; line-height: 1.6; font-weight: 500; color: var(--bg);
+  }
+
+  .bottom-stack {
+    position: absolute; bottom: 150px; left: 100px; right: 100px;
+  }
+  .signoff {
+    display: flex; justify-content: space-between; align-items: baseline;
+    color: var(--gray);
+  }
+  .signoff .brand {
+    font-weight: 900; font-size: 28px; color: var(--ink);
+  }
+  .signoff .meta { font-size: 22px; font-weight: 500; }
+
+  .card.cover { padding-top: 420px; }
+  .card.cover .title { font-size: 80px; }
+</style>
+</head>
+<body>
+  <div class="card {{COVER_CLASS}}">
+    <div class="shape top-left"></div>
+    <div class="shape top-right"></div>
+    <div class="shape bottom-right"></div>
+    <div class="page-indicator">{{PAGE}} / {{TOTAL}}</div>
+    {{#SWIPE}}<div class="swipe-top">{{SWIPE}} →</div>{{/SWIPE}}
+
+    {{#EYEBROW}}<div class="eyebrow">{{EYEBROW}}</div>{{/EYEBROW}}
+
+    {{#TITLE}}<h1 class="title">{{{TITLE}}}</h1>{{/TITLE}}
+    {{#TITLE}}<span class="title-mark"></span>{{/TITLE}}
+    {{#SUBTITLE}}<p class="subtitle">{{SUBTITLE}}</p>{{/SUBTITLE}}
+
+    {{BODY_HTML}}
+
+    <div class="bottom-stack">
+      <div class="signoff">
+        <span class="brand">{{BRAND}}</span>
+        <span class="meta">{{META}}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

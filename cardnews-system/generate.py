@@ -342,6 +342,58 @@ DEFAULT_PALETTE = {
 }
 
 
+# 새 8 디자인 시스템 (4 base × 2 color variants).
+# 각 항목: template 파일 + color (CSS 변수에 주입).
+DESIGN_CONFIGS: dict[str, dict] = {
+    "newsprint_forest": {
+        "template": "design_newsprint.html",
+        "colors": {"bg": "#F8F4EA", "ink": "#181C18",
+                   "accent": "#1F4A38", "pop": "#1F4A38"},
+    },
+    "newsprint_burgundy": {
+        "template": "design_newsprint.html",
+        "colors": {"bg": "#F5F0E0", "ink": "#201814",
+                   "accent": "#7A2740", "pop": "#7A2740"},
+    },
+    "dark_copper": {
+        "template": "design_dark.html",
+        "colors": {"bg": "#161618", "ink": "#F0E8DC",
+                   "accent": "#C97464", "pop": "#C97464"},
+    },
+    "dark_sage": {
+        "template": "design_dark.html",
+        "colors": {"bg": "#1C232D", "ink": "#ECECE4",
+                   "accent": "#90A88E", "pop": "#90A88E"},
+    },
+    "gradient_sunset": {
+        "template": "design_gradient.html",
+        "colors": {"bg": "#8C3C6E", "ink": "#FAF5EB",
+                   "accent": "#FFC864", "pop": "#FFC864",
+                   "grad_start": "#E6645A", "grad_end": "#8C3C6E"},
+    },
+    "gradient_forest": {
+        "template": "design_gradient.html",
+        "colors": {"bg": "#326964", "ink": "#ECE8DC",
+                   "accent": "#D0A85F", "pop": "#D0A85F",
+                   "grad_start": "#163832", "grad_end": "#326964"},
+    },
+    "geometric_earthy": {
+        "template": "design_geometric.html",
+        "colors": {"bg": "#F0E6D2", "ink": "#2D231C",
+                   "accent": "#7A7C41", "pop": "#C0583C",
+                   "shape3": "#DCA846"},
+    },
+    "geometric_navy": {
+        "template": "design_geometric.html",
+        "colors": {"bg": "#F8F4EC", "ink": "#1C243A",
+                   "accent": "#344E82", "pop": "#F58A7A",
+                   "shape3": "#FAD7B2"},
+    },
+}
+
+DESIGN_SLUGS = list(DESIGN_CONFIGS.keys())
+
+
 def render_card_html(
     template: str,
     spec: CardSpec,
@@ -349,6 +401,7 @@ def render_card_html(
     brand_meta: str,
     palette: dict | None = None,
     cover_variant: str = "var-a",
+    font_base: str = "",
 ) -> str:
     """아주 단순한 mustache-lite 치환."""
     p = {**DEFAULT_PALETTE, **(palette or {})}
@@ -368,6 +421,11 @@ def render_card_html(
         "COLOR_INK": p["ink"],
         "COLOR_ACCENT": p["accent"],
         "COLOR_POP": p["pop"],
+        # 신 디자인 (gradient/geometric) 추가 키 — 없는 디자인엔 무해
+        "GRAD_START":  p.get("grad_start", p["bg"]),
+        "GRAD_END":    p.get("grad_end", p["bg"]),
+        "COLOR_SHAPE3": p.get("shape3", p["accent"]),
+        "FONT_BASE":   font_base,
     }
 
     # 조건 블록 {{#KEY}} ... {{/KEY}}
@@ -424,33 +482,47 @@ def render_set(
     brand_meta: str,
     palette: dict | None = None,
     cover_variant: str = "var-a",
+    template_name: str = "card.html",
 ) -> list[Path]:
     from playwright.sync_api import sync_playwright
 
     brand_name = (brand_name or "").strip() or "Insurance Talk Notes"
     brand_meta = (brand_meta or "").strip()
 
-    template = (ROOT / "templates" / "card.html").read_text(encoding="utf-8")
+    template_path = ROOT / "templates" / template_name
+    template = template_path.read_text(encoding="utf-8")
+    font_base = (ROOT / "fonts").resolve().as_uri()  # file:///abs/path/cardnews-system/fonts
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
 
+    launch_kwargs = {}
+    exe = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+    if exe:
+        launch_kwargs["executable_path"] = exe
+
     with sync_playwright() as p:
-        browser = p.chromium.launch()
-        context = browser.new_context(viewport={"width": 1080, "height": 1080},
+        browser = p.chromium.launch(**launch_kwargs)
+        # 1080×1350 (인스타 portrait 4:5)
+        context = browser.new_context(viewport={"width": 1080, "height": 1350},
                                       device_scale_factor=2)
         page = context.new_page()
         for spec in card_set.cards:
             html = render_card_html(
                 template, spec, brand_name, brand_meta,
-                palette=palette, cover_variant=cover_variant,
+                palette=palette, cover_variant=cover_variant, font_base=font_base,
             )
             page.set_content(html, wait_until="networkidle")
             png_path = out_dir / f"{spec.page:02d}.png"
             page.screenshot(path=str(png_path), full_page=False, omit_background=False,
-                            clip={"x": 0, "y": 0, "width": 1080, "height": 1080})
+                            clip={"x": 0, "y": 0, "width": 1080, "height": 1350})
             paths.append(png_path)
         browser.close()
     return paths
+
+
+def _design_for_topic(cfg: dict, topic: str) -> str:
+    """토픽 인덱스 % 8 로 8 디자인 결정적 회전. 같은 토픽은 항상 같은 디자인."""
+    return DESIGN_SLUGS[_topic_index(cfg, topic) % len(DESIGN_SLUGS)]
 
 
 # ----------------------------- CLI ---------------------------------------
@@ -533,17 +605,21 @@ def generate_one(
 
     out_base = ROOT / cfg["paths"]["output"]
     out = slot_dir(out_base, day, slot)
-    palette = _palette_for_topic(cfg, topic)
-    cover_variant = _cover_variant_for_topic(cfg, topic)
+
+    # 신 8 디자인 시스템 — 토픽별 결정적 회전
+    design_slug = _design_for_topic(cfg, topic)
+    design = DESIGN_CONFIGS[design_slug]
+
     render_set(
         card_set, out, cfg["brand"]["name"], cfg["brand"]["meta"],
-        palette=palette, cover_variant=cover_variant,
+        palette=design["colors"],
+        cover_variant="",  # 신 디자인은 cover variant 사용 안 함 (디자인 자체가 변주)
+        template_name=design["template"],
     )
 
     write_caption(ROOT / cfg["paths"]["captions"], day, slot, card_set.caption)
-    palette_name = (palette or {}).get("name", "default")
     print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) "
-          f"[{palette_name}/{cover_variant}] → {out}")
+          f"[design={design_slug}] → {out}")
     return card_set
 
 
