@@ -1,0 +1,165 @@
+name: Publish watchdog (self-healing)
+
+# GitHub Actions schedule cron 은 시간:00 / :30 같은 정시 부하 피크 시간에
+# skip 또는 지연이 잦다 (특히 UTC 00:00/04:00 = KST 09:00/13:00). instagram-
+# publish.yml 의 정시 cron 들이 빠지면 오늘 그 슬롯은 영영 못 받음.
+#
+# 이 watchdog 은 매 15분 (정시 피크 시간 회피한 분에) 돌면서 catch-up:
+#   1) 오늘 KST 날짜 확인
+#   2) 슬롯별로 시간 게이트(슬롯시간 - 30분) 이미 통과
+#   3) published.flag 없음 + draft 또는 approved 에 카드 3장 이상
+#   → scheduler.py 호출해서 발행. 이미 발행됐으면 즉시 skip (idempotent).
+#
+# 정시 publish cron 이 빠져도 다음 watchdog 사이클(최대 15분)에 catch-up.
+# 같은 concurrency group "cardnews-publish" 라 정시 cron 과 동시 실행 안 됨.
+
+on:
+  schedule:
+    # 정시(:00) / 반(:30) 부하 피크 회피. 매 시간 4회.
+    - cron: "7 * * * *"
+    - cron: "22 * * * *"
+    - cron: "37 * * * *"
+    - cron: "52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: cardnews-publish
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r cardnews-system/requirements.txt
+
+      - name: Catch-up missed publishes
+        id: catchup
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+        run: |
+          set -u
+          DATE=$(TZ=Asia/Seoul date +%F)
+          NOW_KST_MIN=$(( $(TZ=Asia/Seoul date +%-H) * 60 + $(TZ=Asia/Seoul date +%-M) ))
+          echo "watchdog @ KST $(TZ=Asia/Seoul date '+%H:%M') (DATE=$DATE NOW_MIN=$NOW_KST_MIN)"
+
+          # origin 최신 동기화 (다른 워크플로가 직전에 commit 한 flag 반영)
+          git fetch origin "$GITHUB_REF_NAME" --quiet || true
+          git checkout "origin/$GITHUB_REF_NAME" -- cardnews-system/output 2>/dev/null || true
+
+          count_pngs() {
+            [ -d "$1" ] || { echo 0; return; }
+            find "$1" -maxdepth 1 -name '*.png' | wc -l
+          }
+
+          DID_WORK=0
+          FAILED=""
+          for SLOT in AM NOON PM; do
+            SLOT_DIR="cardnews-system/output/$DATE/$SLOT"
+            mkdir -p "$SLOT_DIR"
+
+            case "$SLOT" in
+              AM)   SLOT_MIN=540  ;;
+              NOON) SLOT_MIN=780  ;;
+              PM)   SLOT_MIN=1020 ;;
+            esac
+
+            # 슬롯 시간 30분 전 미만이면 아직 너무 일러서 skip.
+            if [ "$NOW_KST_MIN" -lt $((SLOT_MIN - 30)) ]; then
+              echo "[$SLOT] not yet (NOW=$NOW_KST_MIN < $((SLOT_MIN - 30)))"
+              continue
+            fi
+            # 슬롯 시간 +6시간 지났으면 너무 늦어서 묻고 skip
+            if [ "$NOW_KST_MIN" -gt $((SLOT_MIN + 360)) ]; then
+              echo "[$SLOT] too late (NOW=$NOW_KST_MIN > $((SLOT_MIN + 360))); skip"
+              continue
+            fi
+            if [ -f "$SLOT_DIR/published.flag" ]; then
+              echo "[$SLOT] already published"
+              continue
+            fi
+            if [ -f "$SLOT_DIR/rejected.flag" ]; then
+              echo "[$SLOT] rejected"
+              continue
+            fi
+
+            APP=$(count_pngs "$SLOT_DIR/approved")
+            DRF=$(count_pngs "$SLOT_DIR/draft")
+            if [ "$APP" -lt 3 ] && [ "$DRF" -ge 3 ]; then
+              echo "[$SLOT] inline-approving $DRF cards"
+              python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
+              APP=$(count_pngs "$SLOT_DIR/approved")
+            fi
+            if [ "$APP" -lt 3 ]; then
+              echo "[$SLOT] no cards (approved=$APP draft=$DRF); skip"
+              continue
+            fi
+
+            DID_WORK=1
+            echo "[$SLOT] watchdog publishing..."
+            if ! python cardnews-system/scheduler.py --slot "$SLOT" --date "$DATE"; then
+              echo "[$SLOT] FAILED"
+              FAILED="$FAILED $SLOT"
+            fi
+          done
+
+          echo "did_work=$DID_WORK" >> $GITHUB_OUTPUT
+          echo "failed=${FAILED# }" >> $GITHUB_OUTPUT
+          if [ -n "$FAILED" ]; then
+            echo "Some slots failed:$FAILED"
+            exit 1
+          fi
+
+      - name: Commit any new flags
+        if: always() && steps.catchup.outputs.did_work == '1'
+        run: |
+          DATE=$(TZ=Asia/Seoul date +%F)
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "cardnews-system/output/$DATE" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git commit -m "watchdog: $DATE catch-up publish"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "push failed (attempt $i/5), pulling --rebase"
+            git fetch origin "$GITHUB_REF_NAME"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            sleep $((i * 2))
+          done
+          exit 1
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().slice(0,10);
+            const url  = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const failed = '${{ steps.catchup.outputs.failed }}';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[watchdog] ${date} 발행 실패: ${failed || '(unknown)'}`,
+              body: [
+                `**시각:** ${new Date().toISOString()}`,
+                `**실패 슬롯:** ${failed}`,
+                `**로그:** ${url}`,
+              ].join("\n"),
+              labels: ["automation-failure", "watchdog"],
+            });

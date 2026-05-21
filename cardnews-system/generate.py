@@ -652,6 +652,9 @@ def main() -> int:
     parser.add_argument("--start", default=None, help="시작일 YYYY-MM-DD (기본: 오늘)")
     parser.add_argument("--preview", action="store_true", help="오늘 AM 한 세트만 생성")
     parser.add_argument("--no-llm", action="store_true", help="더미 페이로드로 동작 확인")
+    parser.add_argument("--skip-existing", action="store_true",
+                        help="captions/<date>_<slot>.txt 가 이미 있으면 그 slot 생성 skip "
+                             "(daily cron 의 idempotency)")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -668,11 +671,18 @@ def main() -> int:
         return 0
 
     slots = [s.strip() for s in args.slots.split(",") if s.strip()]
+    captions_dir = ROOT / cfg["paths"]["captions"]
     used: list[str] = []
     idx = 0
     for d in range(args.days):
         day = today + dt.timedelta(days=d)
         for slot in slots:
+            if args.skip_existing:
+                cap_path = captions_dir / f"{day.isoformat()}_{slot}.txt"
+                if cap_path.exists():
+                    print(f"[skip] {day} {slot}: caption already exists", file=sys.stderr)
+                    idx += 1
+                    continue
             topic = topics[idx % len(topics)]
             structure = _structure_for_idx(cfg, idx)
             caption_style = _caption_style_for_idx(cfg, idx)

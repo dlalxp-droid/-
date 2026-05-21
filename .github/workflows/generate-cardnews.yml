@@ -6,6 +6,13 @@ name: Generate cardnews
 # 필요한 secrets (LLM 모드일 때): ANTHROPIC_API_KEY
 
 on:
+  schedule:
+    # 매일 새벽 KST 02:30 / 03:30 / 04:30 (UTC 17:30 / 18:30 / 19:30 전날)
+    # — 3회 재시도. 이미 생성된 날짜의 caption 파일이 있으면 skip (idempotent).
+    # GitHub Actions cron 드리프트 대응. UTC 17~19 는 미국 저녁 시간대로 비교적 안정적.
+    - cron: "30 17 * * *"
+    - cron: "30 18 * * *"
+    - cron: "30 19 * * *"
   workflow_dispatch:
     inputs:
       topic:
@@ -69,12 +76,13 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TOPIC: ${{ inputs.topic }}
-          DAYS: ${{ inputs.days }}
-          SLOTS: ${{ inputs.slots }}
+          # schedule 트리거 시엔 매일 1일치만 생성 (내일분). dispatch 시엔 입력값.
+          DAYS: ${{ github.event_name == 'schedule' && '1' || inputs.days }}
+          SLOTS: ${{ github.event_name == 'schedule' && 'AM,NOON,PM' || inputs.slots }}
           START: ${{ steps.ctx.outputs.start }}
-          USE_LLM: ${{ inputs.use_llm }}
+          USE_LLM: ${{ github.event_name == 'schedule' && 'true' || inputs.use_llm }}
         run: |
-          ARGS=(--days "$DAYS" --slots "$SLOTS" --start "$START")
+          ARGS=(--days "$DAYS" --slots "$SLOTS" --start "$START" --skip-existing)
           if [ -n "$TOPIC" ]; then ARGS+=(--topic "$TOPIC"); fi
           if [ "$USE_LLM" != "true" ]; then ARGS+=(--no-llm); fi
           python cardnews-system/generate.py "${ARGS[@]}"
