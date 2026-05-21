@@ -9,9 +9,18 @@ name: Auto-approve cardnews (B-flow)
 
 on:
   schedule:
-    - cron: "30 21 * * *"  # KST 06:30 (AM   슬롯 승인)
-    - cron: "30 1 * * *"   # KST 10:30 (NOON 슬롯 승인)
-    - cron: "30 5 * * *"   # KST 14:30 (PM   슬롯 승인)
+    # GitHub Actions cron 은 5~60분 드리프트가 흔하고, 한 번 빠지면 그 슬롯이
+    # 영영 안 돈다. 슬롯당 3회(20분 간격) 재시도해서 catch-up. 두 번째 이후는
+    # idempotency 로 noop — draft → approved 가 이미 끝나 있으면 변경 0건.
+    - cron: "30 21 * * *"  # AM   첫 시도 KST 06:30
+    - cron: "50 21 * * *"  # AM   재시도 KST 06:50
+    - cron: "10 22 * * *"  # AM   재시도 KST 07:10
+    - cron: "30 1 * * *"   # NOON 첫 시도 KST 10:30
+    - cron: "50 1 * * *"   # NOON 재시도 KST 10:50
+    - cron: "10 2 * * *"   # NOON 재시도 KST 11:10
+    - cron: "30 5 * * *"   # PM   첫 시도 KST 14:30
+    - cron: "50 5 * * *"   # PM   재시도 KST 14:50
+    - cron: "10 6 * * *"   # PM   재시도 KST 15:10
   workflow_dispatch:
     inputs:
       slot:
@@ -45,12 +54,12 @@ jobs:
         run: |
           if [ -n "${{ inputs.slot }}" ]; then
             SLOT="${{ inputs.slot }}"
-          elif [ "${{ github.event.schedule }}" = "30 21 * * *" ]; then
-            SLOT="AM"
-          elif [ "${{ github.event.schedule }}" = "30 1 * * *" ]; then
-            SLOT="NOON"
           else
-            SLOT="PM"
+            case "${{ github.event.schedule }}" in
+              "30 21 * * *"|"50 21 * * *"|"10 22 * * *")  SLOT="AM"   ;;
+              "30 1 * * *"|"50 1 * * *"|"10 2 * * *")     SLOT="NOON" ;;
+              *)                                           SLOT="PM"   ;;
+            esac
           fi
           if [ -n "${{ inputs.date }}" ]; then
             DATE="${{ inputs.date }}"

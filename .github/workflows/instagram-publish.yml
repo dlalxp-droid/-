@@ -19,9 +19,17 @@ name: Publish cardnews to Instagram
 
 on:
   schedule:
-    - cron: "0 0 * * *"    # KST 09:00 (UTC 00:00)
-    - cron: "0 4 * * *"    # KST 13:00 (UTC 04:00)
-    - cron: "0 8 * * *"    # KST 17:00 (UTC 08:00)
+    # GitHub Actions cron 드리프트 대응 — 슬롯당 3회 재시도.
+    # published.flag idempotency 로 이미 발행된 슬롯은 즉시 skip.
+    - cron: "0 0 * * *"    # AM   첫 시도 KST 09:00
+    - cron: "30 0 * * *"   # AM   재시도 KST 09:30
+    - cron: "0 1 * * *"    # AM   재시도 KST 10:00
+    - cron: "0 4 * * *"    # NOON 첫 시도 KST 13:00
+    - cron: "30 4 * * *"   # NOON 재시도 KST 13:30
+    - cron: "0 5 * * *"    # NOON 재시도 KST 14:00
+    - cron: "0 8 * * *"    # PM   첫 시도 KST 17:00
+    - cron: "30 8 * * *"   # PM   재시도 KST 17:30
+    - cron: "0 9 * * *"    # PM   재시도 KST 18:00
   workflow_run:
     workflows: ["Auto-approve cardnews (B-flow)"]
     types: [completed]
@@ -92,14 +100,13 @@ jobs:
           # - workflow_run (auto-approve 완료): 오늘 모든 슬롯 (시간 게이트로 필터)
           if [ -n "${{ inputs.slot }}" ]; then
             SLOTS="${{ inputs.slot }}"
-          elif [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then
-            SLOTS="AM"
-          elif [ "${{ github.event.schedule }}" = "0 4 * * *" ]; then
-            SLOTS="NOON"
-          elif [ "${{ github.event.schedule }}" = "0 8 * * *" ]; then
-            SLOTS="PM"
           else
-            SLOTS="AM NOON PM"
+            case "${{ github.event.schedule }}" in
+              "0 0 * * *"|"30 0 * * *"|"0 1 * * *")  SLOTS="AM"   ;;
+              "0 4 * * *"|"30 4 * * *"|"0 5 * * *")  SLOTS="NOON" ;;
+              "0 8 * * *"|"30 8 * * *"|"0 9 * * *")  SLOTS="PM"   ;;
+              *)                                      SLOTS="AM NOON PM" ;;
+            esac
           fi
 
           DRY=""
