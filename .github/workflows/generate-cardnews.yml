@@ -56,12 +56,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Python deps
-        run: pip install -r cardnews-system/requirements.txt
-
-      - name: Install Chromium (Playwright)
-        run: python -m playwright install --with-deps chromium
-
       - name: Resolve start date
         id: ctx
         run: |
@@ -72,7 +66,36 @@ jobs:
           fi
           echo "start=$START" >> $GITHUB_OUTPUT
 
+      # Private repo 분 절약 — chromium(무거움) 설치 전에 이미 생성됐는지 확인.
+      # schedule 재시도(3회) 중 첫 성공 후 나머지는 여기서 빠져서 chromium 설치 안 함.
+      - name: Guard — 이미 생성됐으면 skip
+        id: guard
+        run: |
+          START="${{ steps.ctx.outputs.start }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # schedule 은 내일분 1일치만. 3슬롯 캡션 다 있으면 skip.
+            MISSING=0
+            for SLOT in AM NOON PM; do
+              [ -f "cardnews-system/captions/${START}_${SLOT}.txt" ] || MISSING=1
+            done
+            if [ "$MISSING" = "0" ]; then
+              echo "이미 $START 3슬롯 다 생성됨 → skip (chromium 설치 안 함)"
+              echo "proceed=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+          echo "proceed=true" >> $GITHUB_OUTPUT
+
+      - name: Install Python deps
+        if: steps.guard.outputs.proceed == 'true'
+        run: pip install -r cardnews-system/requirements.txt
+
+      - name: Install Chromium (Playwright)
+        if: steps.guard.outputs.proceed == 'true'
+        run: python -m playwright install --with-deps chromium
+
       - name: Generate
+        if: steps.guard.outputs.proceed == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TOPIC: ${{ inputs.topic }}
@@ -88,6 +111,7 @@ jobs:
           python cardnews-system/generate.py "${ARGS[@]}"
 
       - name: Commit & push
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

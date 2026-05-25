@@ -15,11 +15,12 @@ name: Publish watchdog (self-healing)
 
 on:
   schedule:
-    # 정시(:00) / 반(:30) 부하 피크 회피. 매 시간 4회.
-    - cron: "7 * * * *"
-    - cron: "22 * * * *"
-    - cron: "37 * * * *"
-    - cron: "52 * * * *"
+    # Private repo (무료 2000분/월) 라 매 15분 종일 실행은 분 초과.
+    # 캐러셀 발행이 필요한 윈도우만 커버:
+    #   AM  KST 09:00~11:52 = UTC 00~01시 (publish cron 09:00/09:30/10:00 백업)
+    #   PM  KST 17:00~19:52 = UTC 08~09시 (publish cron 17:00/17:30/18:00 백업)
+    # 정시 피크 회피한 분(:07/:22/:37/:52), 하루 16회.
+    - cron: "7,22,37,52 0-1,8-9 * * *"
   workflow_dispatch:
 
 permissions:
@@ -40,8 +41,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install deps
-        run: pip install -r cardnews-system/requirements.txt
+      - name: Install deps (minimal — scheduler.py 만 필요, playwright 불필요)
+        run: pip install --quiet requests cloudinary pyyaml python-dotenv
 
       - name: Catch-up missed publishes
         id: catchup
