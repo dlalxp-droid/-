@@ -19,17 +19,14 @@ name: Publish cardnews to Instagram
 
 on:
   schedule:
-    # GitHub Actions cron 드리프트 대응 — 슬롯당 3회 재시도.
-    # published.flag idempotency 로 이미 발행된 슬롯은 즉시 skip.
-    - cron: "0 0 * * *"    # AM   첫 시도 KST 09:00
-    - cron: "30 0 * * *"   # AM   재시도 KST 09:30
-    - cron: "0 1 * * *"    # AM   재시도 KST 10:00
-    - cron: "0 4 * * *"    # NOON 첫 시도 KST 13:00
-    - cron: "30 4 * * *"   # NOON 재시도 KST 13:30
-    - cron: "0 5 * * *"    # NOON 재시도 KST 14:00
-    - cron: "0 8 * * *"    # PM   첫 시도 KST 17:00
-    - cron: "30 8 * * *"   # PM   재시도 KST 17:30
-    - cron: "0 9 * * *"    # PM   재시도 KST 18:00
+    # AM / PM 만 캐러셀 발행. NOON 은 릴스로만 발행 (instagram-publish-reel.yml).
+    # cron 드리프트 대응 — 슬롯당 3회 재시도. published.flag idempotency 로 skip.
+    - cron: "0 0 * * *"    # AM 첫 시도 KST 09:00
+    - cron: "30 0 * * *"   # AM 재시도 KST 09:30
+    - cron: "0 1 * * *"    # AM 재시도 KST 10:00
+    - cron: "0 8 * * *"    # PM 첫 시도 KST 17:00
+    - cron: "30 8 * * *"   # PM 재시도 KST 17:30
+    - cron: "0 9 * * *"    # PM 재시도 KST 18:00
   workflow_run:
     workflows: ["Auto-approve cardnews (B-flow)"]
     types: [completed]
@@ -102,10 +99,10 @@ jobs:
             SLOTS="${{ inputs.slot }}"
           else
             case "${{ github.event.schedule }}" in
-              "0 0 * * *"|"30 0 * * *"|"0 1 * * *")  SLOTS="AM"   ;;
-              "0 4 * * *"|"30 4 * * *"|"0 5 * * *")  SLOTS="NOON" ;;
-              "0 8 * * *"|"30 8 * * *"|"0 9 * * *")  SLOTS="PM"   ;;
-              *)                                      SLOTS="AM NOON PM" ;;
+              "0 0 * * *"|"30 0 * * *"|"0 1 * * *")  SLOTS="AM" ;;
+              "0 8 * * *"|"30 8 * * *"|"0 9 * * *")  SLOTS="PM" ;;
+              # workflow_run (auto-approve 완료) 트리거: AM/PM 만 (NOON 은 릴스 전용)
+              *)                                      SLOTS="AM PM" ;;
             esac
           fi
 

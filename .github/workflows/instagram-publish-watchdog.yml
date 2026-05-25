@@ -65,15 +65,15 @@ jobs:
             find "$1" -maxdepth 1 -name '*.png' | wc -l
           }
 
+          # NOON 은 캐러셀 발행 안 함 (릴스 전용 — instagram-publish-reel.yml).
           DID_WORK=0
           FAILED=""
-          for SLOT in AM NOON PM; do
+          for SLOT in AM PM; do
             SLOT_DIR="cardnews-system/output/$DATE/$SLOT"
             mkdir -p "$SLOT_DIR"
 
             case "$SLOT" in
               AM)   SLOT_MIN=540  ;;
-              NOON) SLOT_MIN=780  ;;
               PM)   SLOT_MIN=1020 ;;
             esac
 
