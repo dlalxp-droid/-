@@ -632,6 +632,20 @@ def _resolve_topics(args, cfg: dict) -> list[str]:
     return [cfg.get("content", {}).get("default_topic", "보험 상담 화법")]
 
 
+# 토픽 회전 인덱스를 (날짜, 슬롯) 으로부터 결정적으로 계산.
+# 이전 구현은 main() 안에서 idx=0 으로 초기화 후 슬롯마다 +1 했는데,
+# schedule cron 이 매일 --days 1 로 호출되므로 매 실행이 idx=0 부터 시작
+# → AM=topics[0], NOON=topics[1], PM=topics[2] 가 매일 반복.
+# 날짜 기반으로 idx 를 산출하면 슬롯당 len(topics) 일 주기로 순환한다.
+SLOT_ORDER = ["AM", "NOON", "PM"]
+ROTATION_EPOCH = dt.date(2026, 1, 1)
+
+
+def _rotation_idx(day: dt.date, slot: str) -> int:
+    slot_pos = SLOT_ORDER.index(slot) if slot in SLOT_ORDER else 0
+    return (day - ROTATION_EPOCH).days * len(SLOT_ORDER) + slot_pos
+
+
 def _check_brand(cfg: dict) -> None:
     name = (cfg.get("brand", {}).get("name") or "").strip()
     if not name or "여기에" in name or "본인 명의" in name:
@@ -672,8 +686,21 @@ def main() -> int:
 
     slots = [s.strip() for s in args.slots.split(",") if s.strip()]
     captions_dir = ROOT / cfg["paths"]["captions"]
+
+    # recent_topics 로 LLM 에 직전 6슬롯 주제 알려주기. used 는 이번 런에서
+    # 실제로 만든 것만 들어가므로, daily cron(1일치) 에선 첫 슬롯이 빈 hint 로
+    # 들어간다. 같은 토픽이 LLM 으로 다른 표현으로 풀려도 모티프가 겹치니까,
+    # 시드용으로 지난 6슬롯 만큼은 회전 인덱스를 역산해 채워둔다.
     used: list[str] = []
-    idx = 0
+    seed_pairs: list[tuple[dt.date, str]] = []
+    for offset in range(1, 3):
+        d_seed = today - dt.timedelta(days=offset)
+        for slot in reversed(SLOT_ORDER):
+            seed_pairs.append((d_seed, slot))
+    seed_pairs = list(reversed(seed_pairs))[-6:]
+    for d_seed, slot_seed in seed_pairs:
+        used.append(topics[_rotation_idx(d_seed, slot_seed) % len(topics)])
+
     for d in range(args.days):
         day = today + dt.timedelta(days=d)
         for slot in slots:
@@ -681,8 +708,8 @@ def main() -> int:
                 cap_path = captions_dir / f"{day.isoformat()}_{slot}.txt"
                 if cap_path.exists():
                     print(f"[skip] {day} {slot}: caption already exists", file=sys.stderr)
-                    idx += 1
                     continue
+            idx = _rotation_idx(day, slot)
             topic = topics[idx % len(topics)]
             structure = _structure_for_idx(cfg, idx)
             caption_style = _caption_style_for_idx(cfg, idx)
@@ -696,7 +723,6 @@ def main() -> int:
                          recent_topics=used[-6:] or None,
                          structure=structure, caption_style=caption_style)
             used.append(topic)
-            idx += 1
     return 0
 
 
