@@ -394,52 +394,76 @@ DEFAULT_PALETTE = {
 }
 
 
+# 타이틀에 쓸 수 있는 트렌디 폰트 풀. 값이 None인 file 은 이미 템플릿에
+# @font-face 로 선언돼 있는 폰트(Pretendard)라 별도 주입이 필요 없다는 뜻.
+# weight 900 으로 등록해서 .title 의 font-weight:900 요청에 그대로 매칭시킨다
+# (단일 굵기 디스플레이 폰트라 브라우저의 fake-bold 합성을 피하는 트릭).
+FONT_CONFIGS: dict[str, dict] = {
+    "pretendard":   {"family": "Pretendard",   "file": None},
+    "gmarket_bold": {"family": "Gmarket Sans", "file": "GmarketSansBold.otf"},
+    "jalnan":       {"family": "Jalnan",       "file": "Jalnan.otf"},
+    "bm_dohyeon":   {"family": "BM DOHYEON",   "file": "BMDOHYEON.otf"},
+}
+
+
 # 새 8 디자인 시스템 (4 base × 2 color variants).
-# 각 항목: template 파일 + color (CSS 변수에 주입).
+# 각 항목: template 파일 + color (CSS 변수에 주입) + title_font (타이틀 전용
+# 트렌디 폰트, 본문은 항상 가독성 위해 Pretendard 유지).
+# newsprint(에디토리얼 톤)는 트렌디 폰트가 안 어울려서 Pretendard 유지,
+# dark/gradient/geometric(SNS 트렌디 톤) 6장은 각기 다른 폰트를 배정해
+# "그때그때" 디자인 무드에 맞는 폰트가 쓰이도록 한다.
 DESIGN_CONFIGS: dict[str, dict] = {
     "newsprint_forest": {
         "template": "design_newsprint.html",
         "colors": {"bg": "#F8F4EA", "ink": "#181C18",
                    "accent": "#1F4A38", "pop": "#1F4A38"},
+        "title_font": "pretendard",
     },
     "newsprint_burgundy": {
         "template": "design_newsprint.html",
         "colors": {"bg": "#F5F0E0", "ink": "#201814",
                    "accent": "#7A2740", "pop": "#7A2740"},
+        "title_font": "pretendard",
     },
     "dark_copper": {
         "template": "design_dark.html",
         "colors": {"bg": "#161618", "ink": "#F0E8DC",
                    "accent": "#C97464", "pop": "#C97464"},
+        "title_font": "gmarket_bold",
     },
     "dark_sage": {
         "template": "design_dark.html",
         "colors": {"bg": "#1C232D", "ink": "#ECECE4",
                    "accent": "#90A88E", "pop": "#90A88E"},
+        "title_font": "bm_dohyeon",
     },
     "gradient_sunset": {
         "template": "design_gradient.html",
         "colors": {"bg": "#8C3C6E", "ink": "#FAF5EB",
                    "accent": "#FFC864", "pop": "#FFC864",
                    "grad_start": "#E6645A", "grad_end": "#8C3C6E"},
+        "title_font": "jalnan",
     },
     "gradient_forest": {
         "template": "design_gradient.html",
         "colors": {"bg": "#326964", "ink": "#ECE8DC",
                    "accent": "#D0A85F", "pop": "#D0A85F",
                    "grad_start": "#163832", "grad_end": "#326964"},
+        "title_font": "gmarket_bold",
     },
     "geometric_earthy": {
         "template": "design_geometric.html",
         "colors": {"bg": "#F0E6D2", "ink": "#2D231C",
                    "accent": "#7A7C41", "pop": "#C0583C",
                    "shape3": "#DCA846"},
+        "title_font": "jalnan",
     },
     "geometric_navy": {
         "template": "design_geometric.html",
         "colors": {"bg": "#F8F4EC", "ink": "#1C243A",
                    "accent": "#344E82", "pop": "#F58A7A",
                    "shape3": "#FAD7B2"},
+        "title_font": "bm_dohyeon",
     },
 }
 
@@ -454,9 +478,17 @@ def render_card_html(
     palette: dict | None = None,
     cover_variant: str = "var-a",
     font_base: str = "",
+    title_font: str = "pretendard",
 ) -> str:
     """아주 단순한 mustache-lite 치환."""
     p = {**DEFAULT_PALETTE, **(palette or {})}
+    font_cfg = FONT_CONFIGS.get(title_font) or FONT_CONFIGS["pretendard"]
+    title_font_face = ""
+    if font_cfg.get("file"):
+        title_font_face = (
+            f"@font-face {{ font-family: '{font_cfg['family']}'; font-weight: 900; "
+            f"src: url('{font_base}/{font_cfg['file']}') format('opentype'); }}"
+        )
     html = template
     repl = {
         "PAGE": str(spec.page),
@@ -478,6 +510,8 @@ def render_card_html(
         "GRAD_END":    p.get("grad_end", p["bg"]),
         "COLOR_SHAPE3": p.get("shape3", p["accent"]),
         "FONT_BASE":   font_base,
+        "TITLE_FONT_FAMILY": font_cfg["family"],
+        "TITLE_FONT_FACE":   title_font_face,
     }
 
     # 조건 블록 {{#KEY}} ... {{/KEY}}
@@ -535,6 +569,7 @@ def render_set(
     palette: dict | None = None,
     cover_variant: str = "var-a",
     template_name: str = "card.html",
+    title_font: str = "pretendard",
 ) -> list[Path]:
     from playwright.sync_api import sync_playwright
 
@@ -562,6 +597,7 @@ def render_set(
             html = render_card_html(
                 template, spec, brand_name, brand_meta,
                 palette=palette, cover_variant=cover_variant, font_base=font_base,
+                title_font=title_font,
             )
             page.set_content(html, wait_until="networkidle")
             png_path = out_dir / f"{spec.page:02d}.png"
@@ -678,11 +714,12 @@ def generate_one(
         palette=design["colors"],
         cover_variant="",  # 신 디자인은 cover variant 사용 안 함 (디자인 자체가 변주)
         template_name=design["template"],
+        title_font=design.get("title_font", "pretendard"),
     )
 
     write_caption(ROOT / cfg["paths"]["captions"], day, slot, card_set.caption)
     print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) "
-          f"[design={design_slug}] → {out}")
+          f"[design={design_slug} font={design.get('title_font','pretendard')}] → {out}")
     return card_set
 
 

@@ -12,6 +12,7 @@
     src: url('{{FONT_BASE}}/Pretendard-Bold.otf') format('opentype'); }
   @font-face { font-family: 'Pretendard'; font-weight: 900;
     src: url('{{FONT_BASE}}/Pretendard-Black.otf') format('opentype'); }
+  {{TITLE_FONT_FACE}}
 
   :root {
     --bg:     {{COLOR_BG}};
@@ -70,7 +71,7 @@
   }
 
   .title {
-    font-family: 'Pretendard', sans-serif;
+    font-family: '{{TITLE_FONT_FAMILY}}', 'Pretendard', sans-serif;
     font-weight: 900; font-size: 76px; line-height: 1.22;
     color: var(--ink); margin-bottom: 28px;
     letter-spacing: -1.5px;
