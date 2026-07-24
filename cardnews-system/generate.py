@@ -61,6 +61,26 @@ PROMPT_PREAMBLE = """너는 한국 보험설계사를 위한 카드뉴스 콘텐
 를 선택할 것.
 """
 
+PROMPT_ANTI_AI_RULES = """## 자연스러움 규칙 (AI가 쓴 것처럼 보이면 실패)
+
+아래는 지금까지 반복돼서 "AI 티" 나는 패턴이다. 절대 반복하지 말 것:
+
+- 캡션을 "저도 처음엔…" 으로 시작하는 습관 — 화자 프로필이 그런 톤이 아니면 쓰지 마라.
+  질문형, 장면 묘사, 단정적 선언, 대화 인용 등 다른 방식으로 열어라.
+- "~한마디로 계약이 살아났어요/N건이 살아났어요/계약이 돌아왔어요" 류 상투 후킹 문구 반복.
+  매 세트마다 후킹 구조 자체를 다르게 시도해라 (숫자 없이 장면으로 시작 / 고객 대화 인용으로
+  시작 / 역설적 문장으로 시작 등).
+- 근거 없이 지나치게 정밀한 통계를 "연구에 따르면"처럼 인용하는 것
+  (예: "67%가", "1.7배 높다는 행동경제학 연구", "2.3배 빨라진다는 연구"). 실제 유명한 이론/저자를
+  인용할 땐 이름을 대고, 그게 아니면 "체감상", "현장에서 보면", "열에 여섯은" 같은 경험적·모호한
+  표현으로 바꿔라. 가짜 정밀도(소수점 배수, 딱 떨어지는 %)는 티가 난다.
+- 문장 끝마다 "👇" 를 붙이는 습관. 이모지는 화자 프로필에 지정된 개수만 지켜라.
+- 모든 문장이 비슷한 길이·리듬으로 대칭적인 것. 짧은 문장과 긴 문장을 섞고, 어미도
+  ("~했거든요", "~하더라고요", "~습니다", "~죠") 한 세트 안에서 두세 종류로 섞어라.
+- 완벽하게 정리된 3단 구조(문제-원인-해법)만 반복하는 것. 가끔은 결론부터 던지고 이유를
+  나중에 대거나, 여담을 살짝 섞는 등 사람이 실제로 말할 때의 흐름을 넣어라.
+"""
+
 PROMPT_CARD_RULES = """## 카드 표현 규칙
 
 title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용 (그 외 HTML 태그 금지).
@@ -150,27 +170,54 @@ def _caption_section(caption_style: dict | None) -> str:
     template = caption_style["template"].rstrip()
     return (
         f"## 캡션 (Instagram caption) — {label}\n\n"
-        "자연스러운 톤. 사무적·교과서적 문장 금지. 동료 설계사에게 말하듯 1인칭/공감체.\n"
-        "이모지는 0~2개까지만, 과용 금지.\n\n"
+        "화자 프로필의 말투를 캡션에도 그대로 살려라. 사무적·교과서적 문장 금지.\n\n"
         "구조 (각 블록 사이 빈 줄 1개):\n"
         f"{template}\n"
     )
 
 
+def _persona_section(persona: dict | None) -> str:
+    """config.content.writer_personas 의 한 항목 → 프롬프트 블록.
+
+    매 세트마다 다른 '화자'를 지정해 문체를 강제로 다르게 만든다. 이게 없으면
+    LLM이 매번 비슷한 톤·습관 표현("저도 처음엔…", 정밀한 가짜 통계 등)을
+    기본값처럼 반복해서 AI가 쓴 글처럼 보인다.
+    """
+    if not persona:
+        return ""
+    name = persona.get("name") or "화자"
+    voice = (persona.get("voice") or "").strip()
+    quirks = (persona.get("quirks") or "").strip()
+    emoji = persona.get("emoji", "0~1개")
+    return (
+        f"## 이번 화자 프로필 — {name}\n\n"
+        f"{voice}\n"
+        f"말버릇/습관: {quirks}\n"
+        f"이모지 사용량: {emoji} (전체 캡션 기준, 초과 금지)\n\n"
+        "카드 문구와 캡션 전체에 이 화자의 말투를 일관되게 녹여라. 다른 화자의\n"
+        "말투나 표현(예: 이 프로필에 없는 습관 표현)을 섞지 마라.\n"
+    )
+
+
 def build_system_prompt(structure: dict | None = None,
-                        caption_style: dict | None = None) -> str:
+                        caption_style: dict | None = None,
+                        persona: dict | None = None) -> str:
     return "\n".join([
         PROMPT_PREAMBLE,
+        _persona_section(persona),
         _story_flow_section(structure),
         _caption_section(caption_style),
         PROMPT_CARD_RULES,
+        PROMPT_ANTI_AI_RULES,
     ])
 
 
 def call_llm(topic: str,
              recent_topics: list[str] | None = None,
              structure: dict | None = None,
-             caption_style: dict | None = None) -> dict:
+             caption_style: dict | None = None,
+             persona: dict | None = None,
+             recent_hooks: list[str] | None = None) -> dict:
     """Claude에 카드뉴스 1세트 콘텐츠를 요청."""
     try:
         import anthropic
@@ -180,6 +227,11 @@ def call_llm(topic: str,
     avoid = ""
     if recent_topics:
         avoid = "\n이미 이번 주에 다룬 주제(표현/예시 겹치지 마라): " + ", ".join(recent_topics)
+    if recent_hooks:
+        avoid += (
+            "\n최근에 쓴 캡션 첫 줄(hook) — 같은 패턴/구조 반복 금지:\n"
+            + "\n".join(f"- {h}" for h in recent_hooks)
+        )
 
     # 카드 수 = 구조에 정의된 길이 (없으면 8~10 범위 안내)
     card_count_hint = "8~10장"
@@ -190,7 +242,7 @@ def call_llm(topic: str,
     msg = client.messages.create(
         model=os.getenv("LLM_MODEL", "claude-opus-4-7"),
         max_tokens=4096,
-        system=build_system_prompt(structure, caption_style),
+        system=build_system_prompt(structure, caption_style, persona),
         messages=[{
             "role": "user",
             "content": f"서브토픽: {topic}{avoid}\n{card_count_hint}의 카드뉴스 1세트를 위 JSON 스키마로 생성하라.",
@@ -576,6 +628,14 @@ def _caption_style_for_idx(cfg: dict, idx: int) -> dict | None:
     return styles[idx % len(styles)]
 
 
+def _persona_for_idx(cfg: dict, idx: int) -> dict | None:
+    """슬롯 idx → 화자 페르소나 1개."""
+    personas = cfg.get("content", {}).get("writer_personas") or []
+    if not personas:
+        return None
+    return personas[idx % len(personas)]
+
+
 def write_caption(captions_dir: Path, day: dt.date, slot: str, caption: str) -> Path:
     captions_dir.mkdir(parents=True, exist_ok=True)
     p = captions_dir / f"{day.isoformat()}_{slot}.txt"
@@ -593,10 +653,13 @@ def generate_one(
     recent_topics: list[str] | None = None,
     structure: dict | None = None,
     caption_style: dict | None = None,
+    persona: dict | None = None,
+    recent_hooks: list[str] | None = None,
 ) -> CardSet:
     if use_llm:
         payload = call_llm(topic, recent_topics=recent_topics,
-                           structure=structure, caption_style=caption_style)
+                           structure=structure, caption_style=caption_style,
+                           persona=persona, recent_hooks=recent_hooks)
     else:
         payload = dummy_payload(topic, idx=idx)
     card_set = payload_to_set(payload)
@@ -687,11 +750,13 @@ def main() -> int:
     slots = [s.strip() for s in args.slots.split(",") if s.strip()]
     captions_dir = ROOT / cfg["paths"]["captions"]
 
-    # recent_topics 로 LLM 에 직전 6슬롯 주제 알려주기. used 는 이번 런에서
-    # 실제로 만든 것만 들어가므로, daily cron(1일치) 에선 첫 슬롯이 빈 hint 로
-    # 들어간다. 같은 토픽이 LLM 으로 다른 표현으로 풀려도 모티프가 겹치니까,
-    # 시드용으로 지난 6슬롯 만큼은 회전 인덱스를 역산해 채워둔다.
+    # recent_topics/recent_hooks 로 LLM 에 직전 슬롯들 정보를 알려주기. used 는
+    # 이번 런에서 실제로 만든 것만 들어가므로, daily cron(1일치) 에선 첫 슬롯이
+    # 빈 hint 로 들어간다. 시드용으로 지난 6슬롯만큼은 회전 인덱스를 역산해
+    # 토픽을 채우고, 이미 생성돼 있는 캡션 파일이 있으면 첫 줄(hook) 도 읽어
+    # "같은 후킹 패턴 반복" 을 막는 데 쓴다.
     used: list[str] = []
+    used_hooks: list[str] = []
     seed_pairs: list[tuple[dt.date, str]] = []
     for offset in range(1, 3):
         d_seed = today - dt.timedelta(days=offset)
@@ -700,6 +765,11 @@ def main() -> int:
     seed_pairs = list(reversed(seed_pairs))[-6:]
     for d_seed, slot_seed in seed_pairs:
         used.append(topics[_rotation_idx(d_seed, slot_seed) % len(topics)])
+        seed_cap = captions_dir / f"{d_seed.isoformat()}_{slot_seed}.txt"
+        if seed_cap.exists():
+            first_line = seed_cap.read_text(encoding="utf-8").strip().splitlines()
+            if first_line:
+                used_hooks.append(first_line[0])
 
     for d in range(args.days):
         day = today + dt.timedelta(days=d)
@@ -713,16 +783,24 @@ def main() -> int:
             topic = topics[idx % len(topics)]
             structure = _structure_for_idx(cfg, idx)
             caption_style = _caption_style_for_idx(cfg, idx)
+            persona = _persona_for_idx(cfg, idx)
             print(
                 f"[gen] {day} {slot} topic={topic!r} "
                 f"structure={(structure or {}).get('name','legacy')} "
-                f"caption={(caption_style or {}).get('name','legacy')}",
+                f"caption={(caption_style or {}).get('name','legacy')} "
+                f"persona={(persona or {}).get('name','legacy')}",
                 file=sys.stderr,
             )
-            generate_one(topic, day, slot, cfg, use_llm=use_llm, idx=idx,
-                         recent_topics=used[-6:] or None,
-                         structure=structure, caption_style=caption_style)
+            card_set = generate_one(
+                topic, day, slot, cfg, use_llm=use_llm, idx=idx,
+                recent_topics=used[-6:] or None,
+                structure=structure, caption_style=caption_style,
+                persona=persona, recent_hooks=used_hooks[-6:] or None,
+            )
             used.append(topic)
+            first_line = (card_set.caption or "").strip().splitlines()
+            if first_line:
+                used_hooks.append(first_line[0])
     return 0
 
 
