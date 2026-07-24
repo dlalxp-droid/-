@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -399,75 +400,88 @@ DEFAULT_PALETTE = {
 # weight 900 으로 등록해서 .title 의 font-weight:900 요청에 그대로 매칭시킨다
 # (단일 굵기 디스플레이 폰트라 브라우저의 fake-bold 합성을 피하는 트릭).
 FONT_CONFIGS: dict[str, dict] = {
-    "pretendard":   {"family": "Pretendard",   "file": None},
-    "gmarket_bold": {"family": "Gmarket Sans", "file": "GmarketSansBold.otf"},
-    "jalnan":       {"family": "Jalnan",       "file": "Jalnan.otf"},
-    "bm_dohyeon":   {"family": "BM DOHYEON",   "file": "BMDOHYEON.otf"},
+    "pretendard":     {"family": "Pretendard",          "file": None},
+    "gmarket_bold":   {"family": "Gmarket Sans",         "file": "GmarketSansBold.otf"},
+    "jalnan":         {"family": "Jalnan",               "file": "Jalnan.otf"},
+    "bm_dohyeon":     {"family": "BM DOHYEON",           "file": "BMDOHYEON.otf"},
+    "bm_hannapro":    {"family": "BM HANNA Pro",         "file": "BMHANNAPro.otf"},
+    "bm_euljiro":     {"family": "BM EULJIRO",           "file": "BMEULJIRO.otf"},
+    "bm_kiranghaerang": {"family": "BM KIRANGHAERANG",   "file": "BMKIRANGHAERANG.otf"},
+    "cookierun":      {"family": "CookieRun",            "file": "CookieRun-Bold.otf"},
+    "tmon_monsori":   {"family": "Tmon Monsori",         "file": "TmonMonsori.ttf"},
+    "nexon_lv1":      {"family": "NEXON Lv1 Gothic",     "file": "NEXONLv1Gothic-Bold.otf"},
+    "cafe24_dangdanghae": {"family": "Cafe24 Dangdanghae", "file": "Cafe24Dangdanghae.otf"},
+    "ownglyph_dagyeong": {"family": "Ownglyph_2022_UWY_Da_Gyeong", "file": "OwnglyphDaGyeong.otf"},
 }
+
+# newsprint(에디토리얼) 를 뺀 나머지 디자인(dark/gradient/geometric)의 타이틀에
+# 순환 배정할 트렌디 폰트 풀. idx(슬롯 회전 인덱스) 기준으로 계속 순환하니까
+# 같은 디자인이라도 매번 다른 폰트가 "돌려가며" 쓰인다.
+TRENDY_FONT_SLUGS = [k for k in FONT_CONFIGS if k != "pretendard"]
 
 
 # 새 8 디자인 시스템 (4 base × 2 color variants).
-# 각 항목: template 파일 + color (CSS 변수에 주입) + title_font (타이틀 전용
-# 트렌디 폰트, 본문은 항상 가독성 위해 Pretendard 유지).
-# newsprint(에디토리얼 톤)는 트렌디 폰트가 안 어울려서 Pretendard 유지,
-# dark/gradient/geometric(SNS 트렌디 톤) 6장은 각기 다른 폰트를 배정해
-# "그때그때" 디자인 무드에 맞는 폰트가 쓰이도록 한다.
+# 각 항목: template 파일 + color (CSS 변수에 주입).
+# newsprint(에디토리얼 톤)는 트렌디 폰트가 안 어울려서 항상 Pretendard,
+# dark/gradient/geometric(SNS 트렌디 톤) 6장은 title_font 를 고정하지 않고
+# TRENDY_FONT_SLUGS 풀에서 idx 로 순환 배정한다 (_title_font_for 참고) —
+# 매번 같은 폰트만 나오지 않고 "돌려가며" 쓰이도록.
 DESIGN_CONFIGS: dict[str, dict] = {
     "newsprint_forest": {
         "template": "design_newsprint.html",
         "colors": {"bg": "#F8F4EA", "ink": "#181C18",
                    "accent": "#1F4A38", "pop": "#1F4A38"},
-        "title_font": "pretendard",
     },
     "newsprint_burgundy": {
         "template": "design_newsprint.html",
         "colors": {"bg": "#F5F0E0", "ink": "#201814",
                    "accent": "#7A2740", "pop": "#7A2740"},
-        "title_font": "pretendard",
     },
     "dark_copper": {
         "template": "design_dark.html",
         "colors": {"bg": "#161618", "ink": "#F0E8DC",
                    "accent": "#C97464", "pop": "#C97464"},
-        "title_font": "gmarket_bold",
     },
     "dark_sage": {
         "template": "design_dark.html",
         "colors": {"bg": "#1C232D", "ink": "#ECECE4",
                    "accent": "#90A88E", "pop": "#90A88E"},
-        "title_font": "bm_dohyeon",
     },
     "gradient_sunset": {
         "template": "design_gradient.html",
         "colors": {"bg": "#8C3C6E", "ink": "#FAF5EB",
                    "accent": "#FFC864", "pop": "#FFC864",
                    "grad_start": "#E6645A", "grad_end": "#8C3C6E"},
-        "title_font": "jalnan",
     },
     "gradient_forest": {
         "template": "design_gradient.html",
         "colors": {"bg": "#326964", "ink": "#ECE8DC",
                    "accent": "#D0A85F", "pop": "#D0A85F",
                    "grad_start": "#163832", "grad_end": "#326964"},
-        "title_font": "gmarket_bold",
     },
     "geometric_earthy": {
         "template": "design_geometric.html",
         "colors": {"bg": "#F0E6D2", "ink": "#2D231C",
                    "accent": "#7A7C41", "pop": "#C0583C",
                    "shape3": "#DCA846"},
-        "title_font": "jalnan",
     },
     "geometric_navy": {
         "template": "design_geometric.html",
         "colors": {"bg": "#F8F4EC", "ink": "#1C243A",
                    "accent": "#344E82", "pop": "#F58A7A",
                    "shape3": "#FAD7B2"},
-        "title_font": "bm_dohyeon",
     },
 }
 
 DESIGN_SLUGS = list(DESIGN_CONFIGS.keys())
+
+
+def _title_font_for(design_slug: str, idx: int) -> str:
+    """디자인 슬러그 + 슬롯 idx → 타이틀 폰트. newsprint 는 항상 Pretendard,
+    나머지는 트렌디 폰트 풀을 idx 기준으로 순환."""
+    if design_slug.startswith("newsprint"):
+        return "pretendard"
+    return TRENDY_FONT_SLUGS[idx % len(TRENDY_FONT_SLUGS)]
 
 
 def render_card_html(
@@ -587,24 +601,37 @@ def render_set(
     if exe:
         launch_kwargs["executable_path"] = exe
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(**launch_kwargs)
-        # 1080×1350 (인스타 portrait 4:5)
-        context = browser.new_context(viewport={"width": 1080, "height": 1350},
-                                      device_scale_factor=2)
-        page = context.new_page()
-        for spec in card_set.cards:
-            html = render_card_html(
-                template, spec, brand_name, brand_meta,
-                palette=palette, cover_variant=cover_variant, font_base=font_base,
-                title_font=title_font,
-            )
-            page.set_content(html, wait_until="networkidle")
-            png_path = out_dir / f"{spec.page:02d}.png"
-            page.screenshot(path=str(png_path), full_page=False, omit_background=False,
-                            clip={"x": 0, "y": 0, "width": 1080, "height": 1350})
-            paths.append(png_path)
-        browser.close()
+    # page.set_content() 로 주입한 문서는 origin 이 about:blank 취급돼서
+    # Chromium 이 file:// 로컬 폰트 로드를 통째로 막는다 ("Not allowed to load
+    # local resource"). @font-face 가 전부 조용히 실패하고 시스템 기본 산세리프로
+    # 폴백돼도 화면상 "그럴싸하게" 보여서 눈치채기 어렵다 — document.fonts 로
+    # 직접 확인해서 잡음. file:// 문서로 실제 navigate 하면 같은 file:// origin
+    # 리소스 로드가 허용되므로, 카드마다 임시 html 파일에 써서 page.goto() 한다.
+    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".html")
+    os.close(tmp_fd)
+    tmp_html = Path(tmp_name)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(**launch_kwargs)
+            # 1080×1350 (인스타 portrait 4:5)
+            context = browser.new_context(viewport={"width": 1080, "height": 1350},
+                                          device_scale_factor=2)
+            page = context.new_page()
+            for spec in card_set.cards:
+                html = render_card_html(
+                    template, spec, brand_name, brand_meta,
+                    palette=palette, cover_variant=cover_variant, font_base=font_base,
+                    title_font=title_font,
+                )
+                tmp_html.write_text(html, encoding="utf-8")
+                page.goto(tmp_html.resolve().as_uri(), wait_until="networkidle")
+                png_path = out_dir / f"{spec.page:02d}.png"
+                page.screenshot(path=str(png_path), full_page=False, omit_background=False,
+                                clip={"x": 0, "y": 0, "width": 1080, "height": 1350})
+                paths.append(png_path)
+            browser.close()
+    finally:
+        tmp_html.unlink(missing_ok=True)
     return paths
 
 
@@ -708,18 +735,19 @@ def generate_one(
     # 신 8 디자인 시스템 — 토픽별 결정적 회전
     design_slug = _design_for_topic(cfg, topic)
     design = DESIGN_CONFIGS[design_slug]
+    title_font = _title_font_for(design_slug, idx)
 
     render_set(
         card_set, out, cfg["brand"]["name"], cfg["brand"]["meta"],
         palette=design["colors"],
         cover_variant="",  # 신 디자인은 cover variant 사용 안 함 (디자인 자체가 변주)
         template_name=design["template"],
-        title_font=design.get("title_font", "pretendard"),
+        title_font=title_font,
     )
 
     write_caption(ROOT / cfg["paths"]["captions"], day, slot, card_set.caption)
     print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) "
-          f"[design={design_slug} font={design.get('title_font','pretendard')}] → {out}")
+          f"[design={design_slug} font={title_font}] → {out}")
     return card_set
 
 
