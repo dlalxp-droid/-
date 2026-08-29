@@ -263,7 +263,8 @@ def main() -> int:
         return 0
 
     images = sorted(folder.glob("*.png"))
-    if not (3 <= len(images) <= 10):
+    if not (2 <= len(images) <= 10):
+        # IG 캐러셀은 최소 2장부터 가능 (카드뉴스는 2장 cover+cta 구성).
         notify(f"[skip] {day} {args.slot}: 캐러셀 매수 비정상 ({len(images)})")
         return 0
 

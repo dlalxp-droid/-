@@ -165,13 +165,13 @@ jobs:
 
             APPROVED=$(count_pngs "$SLOT_DIR/approved")
             DRAFT=$(count_pngs "$SLOT_DIR/draft")
-            if [ "$APPROVED" -lt 3 ] && [ "$DRAFT" -ge 3 ]; then
+            if [ "$APPROVED" -lt 2 ] && [ "$DRAFT" -ge 2 ]; then
               echo "[$SLOT] auto-approve not yet committed; inline-approving $DRAFT cards"
               python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
               APPROVED=$(count_pngs "$SLOT_DIR/approved")
             fi
-            if [ "$APPROVED" -lt 3 ]; then
-              echo "[$SLOT] neither approved nor draft has 3+ cards (approved=$APPROVED, draft=$DRAFT); skip"
+            if [ "$APPROVED" -lt 2 ]; then
+              echo "[$SLOT] neither approved nor draft has 2+ cards (approved=$APPROVED, draft=$DRAFT); skip"
               continue
             fi
 

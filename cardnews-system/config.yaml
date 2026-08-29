@@ -7,8 +7,8 @@ brand:
 design:
   width: 1080
   height: 1080
-  cards_per_set_min: 8
-  cards_per_set_max: 10
+  cards_per_set_min: 2
+  cards_per_set_max: 2
   # 6개의 따뜻한 프리미엄 팔레트. 토픽 인덱스 % 6 으로 결정적으로 선택되어
   # 같은 토픽은 항상 같은 팔레트, 토픽이 다르면 색조가 달라진다.
   # deep-navy-cream(옛 default 톤) 은 의도적으로 마지막. 첫 토픽들이 새 톤으로 보이도록.
@@ -113,49 +113,24 @@ content:
     - "보상 분쟁"
     - "심사 거절 대응"
     - "약관 해석"
-  # 스토리 구조 5종. idx % 5 로 회전 → 같은 구조가 연속 슬롯에 안 나옴.
-  # 각 구조의 cards 시퀀스는 LLM 이 생성할 카드 kind 순서. 마지막은 항상 cta —
-  # cta 카드 내용은 저장/공유가 아니라 DM 유도 (generate.py PROMPT_DM_CTA_RULES).
+  # 스토리 구조 — 딱 2장. 카드 수가 많을 필요 없다는 판단으로 10장 캐러셀에서
+  # 축소. 1장은 주제를 크게 던지는 표지, 2장은 간소화한 요약 + OOO 마스킹으로
+  # 궁금증을 유발하고 그 자리에서 바로 "'키워드' 댓글 또는 DM" 유도까지 끝낸다
+  # (generate.py PROMPT_DM_CTA_RULES). 별도 CTA 전용 장을 더 두지 않는다.
   story_structures:
-    - name: "result-recall"
-      label: "결과 회상형"
+    - name: "quick-hook"
+      label: "초압축 2장형"
       arc: |
-        결과를 먼저 보여주고 어떻게 됐는지를 늦게 공개. cliffhanger 로 매 장 끊는다.
-        Before/After 대비로 멘트 변경 효과 명확히. 7번 카드에 권위자(카네기/아들러/치알디니/매슬로/카네만 등) 1명 인용.
-      cards: ["cover","result","tease","problem","before","after","insight","tips","summary","cta"]
-    - name: "case-study"
-      label: "케이스 스터디형"
-      arc: |
-        한 명의 가상 고객 페르소나 중심 단편 스토리. cover 는 그 고객의 결과 한 줄("OO 고객, OO만에 결정"),
-        persona 는 인구통계+고민, scene 은 첫 미팅 분위기, conflict 는 막힌 지점,
-        turning 은 어떤 멘트가 전환했는지, before/after 카드는 그 멘트 대비,
-        outcome 은 후일담(구체 수치/반응), lesson 은 일반화한 1줄 교훈.
-        가공의 이름(예: "김OO 님, 38세, 카페 운영")·금액·기간을 현실감 있게 넣는다.
-      cards: ["cover","persona","scene","conflict","turning","before","after","outcome","lesson","cta"]
-    - name: "qna"
-      label: "Q&A 모음형"
-      arc: |
-        동료들이 자주 받는 질문 6개 모음. cover 는 "동료들이 가장 자주 묻는 6가지" 류 티저.
-        intro 는 짧은 도입 한 줄. qa1~qa6 카드는 eyebrow=Q1~Q6, title=질문 한 줄(12~14자),
-        subtitle=핵심 답변 멘트(60자), bullets 로 추가 팁 1~2개.
-        스크롤하며 각 장을 발췌해 저장하기 좋게 만든다. summary 는 6개 답변의 공통 원칙 1줄.
-      cards: ["cover","intro","qa1","qa2","qa3","qa4","qa5","qa6","summary","cta"]
-    - name: "ranking"
-      label: "랭킹/비교형"
-      arc: |
-        "현장에서 가장 자주 망하는 멘트 TOP 5" 류 카운트다운. cover 는 랭킹 티저.
-        intro 는 데이터·관찰 근거 한 줄. rank5~rank2 는 eyebrow=#5/#4/#3/#2,
-        title=망하는 멘트(짧게), subtitle=왜 망하는지 한 줄. rank1 은 #1 강조 + 대안 멘트.
-        insight 는 5개 공통 원리. 위로 갈수록 더 자극적·명확하게.
-      cards: ["cover","intro","rank5","rank4","rank3","rank2","rank1","insight","summary","cta"]
-    - name: "dialogue"
-      label: "대화 인용형"
-      arc: |
-        실제 상담 다이얼로그 5턴 인용. cover 는 대화 한 줄 인용("OO" — 그 한 마디로 결정됐다).
-        setup 은 상황·페르소나 한 줄. turn1~turn5 는 each card kind=before/after-style:
-        before=고객 발화(60자 이내), after=설계사 응대 멘트(60자 이내). swipe 로 다음 턴 예고.
-        analysis 는 왜 통했는지, lesson 은 일반화 1줄.
-      cards: ["cover","setup","turn1","turn2","turn3","turn4","turn5","analysis","lesson","cta"]
+        cover 는 주제를 큰 타이틀로 강하게 던지는 표지 한 장. subtitle 로 짧은
+        후킹 한 줄, swipe 로 2번째 장 유도.
+        두 번째 장(kind: cta)이 이 세트의 전부를 압축한다: title 은 핵심 요약을
+        강한 한 줄로, subtitle 은 1~2문장으로 실제 내용을 간소화해서 보여주되
+        결정적 단어/문장 하나는 반드시 OOO 로 가린다. bullets 를 쓴다면 2~3개
+        중 최소 하나는 OOO 로 가린 항목. 그리고 subtitle 또는 bullets 끝에
+        자연스럽게 "'키워드' 댓글 또는 DM" 유도 문구로 마무리한다 — 저장/공유
+        유도 아님. 이 한 장 안에서 요약과 유도를 동시에 끝내는 게 핵심이라,
+        따로 CTA 전용 장을 만들지 않는다.
+      cards: ["cover","cta"]
   # 캡션 톤 7종. idx % 7 로 회전. 표지의 메시지를 다른 단어로 다시 풀어쓰는 원칙은 공통.
   # "저도 처음엔…" / "👇" 를 예시에서 고정으로 안 보여주는 이유: LLM이 예시 문구를
   # 그대로 매번 재사용해서 AI 티가 났다. 각 스타일은 열기 방식을 구조로만 설명한다.

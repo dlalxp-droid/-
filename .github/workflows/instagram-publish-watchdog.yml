@@ -102,12 +102,12 @@ jobs:
 
             APP=$(count_pngs "$SLOT_DIR/approved")
             DRF=$(count_pngs "$SLOT_DIR/draft")
-            if [ "$APP" -lt 3 ] && [ "$DRF" -ge 3 ]; then
+            if [ "$APP" -lt 2 ] && [ "$DRF" -ge 2 ]; then
               echo "[$SLOT] inline-approving $DRF cards"
               python cardnews-system/approve.py --date "$DATE" --slot "$SLOT"
               APP=$(count_pngs "$SLOT_DIR/approved")
             fi
-            if [ "$APP" -lt 3 ]; then
+            if [ "$APP" -lt 2 ]; then
               echo "[$SLOT] no cards (approved=$APP draft=$DRF); skip"
               continue
             fi
