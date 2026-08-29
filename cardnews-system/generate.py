@@ -99,6 +99,17 @@ title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용 (그 외 HT
 
 ## 출력 스키마 (JSON only) — 카드는 항상 정확히 2장 (cover, cta)
 
+cta 카드의 "마스킹" 은 네가 직접 O 로 바꿔 쓰는 게 아니라, 가릴 문구를
+"masked_phrase" 필드에 그대로 적고 그 문구가 들어갈 자리에 리터럴 토큰
+"[MASK]" 를 넣는 방식이다 (렌더링 코드가 masked_phrase 의 글자수만큼 자동으로
+O 로 치환한다 — "생각보다 쉬워요" → "OOOO OOOO"). 이렇게 하는 이유: 네가
+직접 단어 하나만 골라 O 세 개로 바꾸면 나머지 문장에서 이미 답이 다 드러나는
+경우가 많았다 (예: "OOO은 어떻게 보세요?" 처럼 사소한 단어만 가리고 정작
+핵심 화법/기법 자체는 문장에 다 설명해버림). 이제는 "그 결정적 문장 전체"를
+masked_phrase 에 넣고 [MASK] 로 통째로 자리만 남겨라 — 나머지 title/subtitle
+/bullets 텍스트에는 masked_phrase 의 내용을 힌트조차 주지 말고, "어떤 상황에서
+이걸 썼더니 어떻게 됐다"는 맥락만 설명해라.
+
 {
   "topic": "...",
   "caption": "위 캡션 톤 지침에 맞는 인스타 캡션",
@@ -114,9 +125,10 @@ title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용 (그 외 HT
     {
       "kind": "cta",
       "eyebrow": "상단 라벨(짧게)",
-      "title": "핵심 요약을 강한 한 줄로. 여기에도 OOO 마스킹 가능",
-      "subtitle": "1~2문장 요약(OOO 마스킹 포함) + '키워드' 댓글/DM 유도 문구",
-      "bullets": ["요약 포인트1","요약 포인트2(선택, 이 중 하나는 OOO)"]  // 선택
+      "title": "핵심 요약을 강한 한 줄로. 필요하면 여기에도 [MASK] 토큰 사용 가능",
+      "subtitle": "1~2문장 요약(핵심 문구 자리는 [MASK] 토큰) + '키워드' 댓글/DM 유도 문구",
+      "masked_phrase": "[MASK] 자리에 들어갈 실제 문구 전체 (화면엔 O 로만 보임, 15자 내외 권장)",
+      "bullets": ["요약 포인트1","요약 포인트2(선택)"]  // 선택
     }
   ]
 }
@@ -128,24 +140,25 @@ PROMPT_DM_CTA_RULES = """## 낚시(호기심 갭) + "댓글 키워드 또는 DM"
 
 1) 카드가 딱 2장(cover, cta)뿐이라 늘어놓을 자리가 없다 — 그래서 더더욱 cta
    카드 안에서 "결정적 한 문장/정답 멘트"를 완성된 형태로 다 써버리기 쉽다.
-   이걸 막는 방법: 그 결정적 문장의 핵심 부분을 "OOO" 로 가려서 쓴다 (방송
-   자막에서 결정적 단어를 O로 가리는 방식과 동일 — 한국 독자에게 아주 익숙한
-   궁금증 유발 장치라 말로 "원칙만 설명"하는 것보다 훨씬 확실하게 작동한다).
-   문장은 끝까지 자연스럽게 완성하되 결정적 단어/구절 하나만 OOO 로 바꿔라.
-   실제로 있었던 실패 사례: "충분히 그럴 수 있어요. 결정 안 하시는 것도
-   결정이니까요." 를 완성 문장 그대로 다 써버림 — 카드만 봐도 답이 다 나와서
-   DM 할 이유가 없었다.
-   → 이렇게 고친다: "충분히 그럴 수 있어요. OOO도 OOO이니까요." 처럼 핵심
-   단어(반복되는 "결정")를 OOO 로 가린다. 문장 리듬과 구조는 그대로 보여줘서
-   "아 뭔가 있구나"는 느끼게 하되, 그대로 따라 쓸 수는 없게 만드는 것이 목표.
-   subtitle 과 bullets 어디에 넣든 동일 — 요약 설명(왜 통하는지, 어떤 상황
-   인지)은 자유롭게 구체적으로 써도 되지만, "정확히 뭐라고 말했는지"의 완성된
-   문장·정확한 수치 중 최소 하나는 반드시 OOO 로 가린다.
-   숫자도 같은 방식: "OOO초 이상 기다립니다" 처럼 결정적 수치를 가리거나,
-   bullets 항목 중 하나를 "OOO" 로 대체한다 (나쁜 예 — 전부 공개: "톤 다운 /
-   어미 정리형 / 침묵 허용". 좋은 예 — 하나 가림: "톤 다운 / OOO / 침묵 허용").
-   OOO 로 가린 부분은 바로 이어지는 CTA 문구에서 "그 OOO가 뭔지 궁금하면"처럼
-   다시 한번 자연스럽게 언급해도 좋다 (단, 답을 흘리지는 말 것).
+   실패했던 두 가지 패턴 모두 주의:
+   - 실패 A (문장 전체 유출): "충분히 그럴 수 있어요. 결정 안 하시는 것도
+     결정이니까요." 를 그대로 다 써버림 — 카드만 봐도 답이 다 나옴.
+   - 실패 B (엉뚱한 단어만 가림): "OOO은 어떻게 보세요?" 처럼 문장 속 단어
+     하나만 O 세 개로 바꾸고, 정작 그 화법/기법 자체는 앞뒤 문장에 이미 다
+     설명해버림 — 이러면 가린 게 의미가 없다.
+   해결책: masked_phrase 필드에 "결정적 문장/멘트 전체"를 적고, title/subtitle
+   /bullets 안에서 그 문구가 들어갈 자리엔 [MASK] 토큰만 넣는다. masked_phrase
+   의 글자수만큼 렌더링 코드가 자동으로 OOO...로 바꿔주므로 ("생각보다 쉬워요"
+   → "OOOO OOOO") 네가 직접 O 세 개를 손으로 넣지 마라 — 몇 글자짜리 문구인지
+   티가 나야 더 궁금해진다.
+   가장 중요한 규칙: masked_phrase 에 넣은 내용은 title/subtitle/bullets 어디
+   에도 다른 말로 풀어쓰거나 힌트 주지 마라. 그 문구를 "왜/언제 썼는지"의 상황
+   맥락(고객이 어떤 반응이었는지, 어떤 타이밍이었는지)은 구체적으로 설명해도
+   되지만, "정확히 뭐라고 말했는지"는 [MASK] 자리 말고는 절대 드러나면 안 된다.
+   숫자도 같은 방식: 결정적 수치를 masked_phrase 로 넣고 "OOO초 이상
+   기다립니다"처럼 [MASK] 로 가린다. bullets 항목에 쓸 때도 동일 — 항목
+   여러 개 중 결정적인 것 하나만 [MASK] 를 포함시키고 나머지는 평소대로
+   완결해도 된다.
 2) 마지막 카드(kind: cta)는 저장/공유 유도가 아니라 "댓글 키워드 또는 DM" 유도로
    통일한다. 이번 세트 토픽을 대표하는 짧은 키워드(2~6자, 예: 고객이 자주 하는 말이나
    화법의 핵심 단어)를 하나 정해 따옴표로 표시하고, "'키워드' 댓글 또는 DM 주세요"
@@ -323,11 +336,12 @@ def dummy_payload(topic: str, idx: int = 0) -> dict:
              "swipe": "그 한 단어, 뭘까요?"},
             {"kind": "cta",
              "eyebrow": "댓글 · DM",
-             "title": "핵심은<em>OOO</em> 한 마디",
-             "subtitle": "‘생각해볼게요’ 뒤에 반박 대신 OOO를 붙였더니 다음 약속이 잡혔어요. "
+             "title": "핵심은<em>[MASK]</em> 한 마디",
+             "subtitle": "‘생각해볼게요’ 뒤에 반박 대신 [MASK] 를 붙였더니 다음 약속이 잡혔어요. "
                          "정확한 워딩 궁금하면 '생각해볼게요' 댓글 또는 DM 주세요.",
+             "masked_phrase": "그 부분만 여쭤봐도 될까요",
              "bullets": [
-                 "핵심은 반박이 아니라 OOO",
+                 "핵심은 반박이 아니라 [MASK]",
                  "고객 성향별로 톤은 조금씩 달라져요",
              ]},
         ],
@@ -555,6 +569,26 @@ def _extract_keyword_from_caption(caption: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+MASK_TOKEN = "[MASK]"
+
+
+def _mask_phrase(phrase: str) -> str:
+    """공백은 유지하고 나머지 글자는 전부 O로 바꾼다 — 글자수는 그대로 드러나게
+    해서 "몇 글자짜리 문구가 가려져 있다"는 게 시각적으로 보이게 한다."""
+    return "".join(ch if ch.isspace() else "O" for ch in phrase)
+
+
+def _apply_mask(text: str, masked_phrase: str) -> str:
+    """title/subtitle/bullets/caption 안의 [MASK] 토큰을 masked_phrase 길이에
+    맞는 OOO 문자열로 치환. LLM 이 직접 어떤 단어를 가릴지 고르게 하면 엉뚱한
+    단어만 가리고 정작 핵심 문장은 다 드러내는 경우가 많았다 — 그래서 "가릴
+    문구 자체"는 별도 필드(masked_phrase)로 받고, 실제 마스킹은 코드가 결정적
+    으로 처리한다."""
+    if not text or not masked_phrase or MASK_TOKEN not in text:
+        return text
+    return text.replace(MASK_TOKEN, _mask_phrase(masked_phrase))
+
+
 def payload_to_set(payload: dict) -> CardSet:
     cards_in = payload.get("cards", [])
     total = len(cards_in)
@@ -565,21 +599,28 @@ def payload_to_set(payload: dict) -> CardSet:
         total = len(cards_in)
 
     specs: list[CardSpec] = []
+    caption = payload.get("caption", "")
     for i, c in enumerate(cards_in, start=1):
+        masked_phrase = (c.get("masked_phrase") or "").strip()
+        bullets = c.get("bullets")
+        c_for_body = c
+        if masked_phrase and isinstance(bullets, list):
+            c_for_body = {**c, "bullets": [_apply_mask(b, masked_phrase) for b in bullets]}
         specs.append(CardSpec(
             page=i,
             total=total,
             eyebrow=c.get("eyebrow", ""),
-            title=c.get("title", ""),
-            subtitle=c.get("subtitle", ""),
-            body_html=_body_html(c),
+            title=_apply_mask(c.get("title", ""), masked_phrase),
+            subtitle=_apply_mask(c.get("subtitle", ""), masked_phrase),
+            body_html=_body_html(c_for_body),
             swipe=c.get("swipe", ""),
             cover=(c.get("kind") == "cover"),
         ))
+        if masked_phrase:
+            caption = _apply_mask(caption, masked_phrase)
 
     topic = payload.get("topic", "보험 상담 화법")
     slug = re.sub(r"[^0-9A-Za-z가-힣]+", "-", topic).strip("-")[:40] or "set"
-    caption = payload.get("caption", "")
     dm_keyword = (payload.get("dm_keyword") or "").strip() or _extract_keyword_from_caption(caption)
     return CardSet(topic=topic, slug=slug, cards=specs, caption=caption, dm_keyword=dm_keyword)
 
