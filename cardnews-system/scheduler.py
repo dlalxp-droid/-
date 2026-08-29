@@ -31,6 +31,9 @@ import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+from dm_registry import read_keyword_sidecar, register_dm_keyword  # noqa: E402
+
 load_dotenv(ROOT / ".env")
 
 GRAPH = "https://graph.facebook.com/v21.0"
@@ -290,6 +293,12 @@ def main() -> int:
 
     flag.write_text(f"media_id={media_id}\npublished_at={dt.datetime.utcnow().isoformat()}Z\n",
                     encoding="utf-8")
+
+    keyword_info = read_keyword_sidecar(ROOT / cfg["paths"]["captions"], day, args.slot)
+    if keyword_info:
+        register_dm_keyword(media_id, keyword_info.get("keyword", ""),
+                            keyword_info.get("topic", ""))
+
     notify(f"[ok] {day} {args.slot} 업로드 완료 (media_id={media_id})")
     return 0
 

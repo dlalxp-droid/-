@@ -27,6 +27,9 @@ import requests
 
 ROOT = Path(__file__).resolve().parent
 CARDNEWS_ROOT = ROOT.parent
+sys.path.insert(0, str(CARDNEWS_ROOT))
+from dm_registry import read_keyword_sidecar, register_dm_keyword  # noqa: E402
+
 GRAPH = "https://graph.facebook.com/v21.0"
 
 
@@ -317,6 +320,12 @@ def main() -> int:
         f"media_id={media_id}\npublished_at={dt.datetime.utcnow().isoformat()}Z\n",
         encoding="utf-8",
     )
+
+    keyword_info = read_keyword_sidecar(CARDNEWS_ROOT / "captions", day, args.slot)
+    if keyword_info:
+        register_dm_keyword(media_id, keyword_info.get("keyword", ""),
+                            keyword_info.get("topic", ""))
+
     return 0
 
 

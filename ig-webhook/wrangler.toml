@@ -1,0 +1,20 @@
+name = "ig-webhook"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# 배포 전 `wrangler kv:namespace create DM_KEYWORDS` 로 만든 뒤 id 를 채워넣는다.
+[[kv_namespaces]]
+binding = "DM_KEYWORDS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# 비밀 아닌 값. 배포 후 바꾸고 싶으면 이 파일 수정 후 재배포하거나
+# `wrangler deploy` 없이 대시보드에서 바로 편집 가능.
+[vars]
+IG_USER_ID = "REPLACE_WITH_IG_USER_ID"
+COMMENT_REPLY_TEMPLATE = "안녕하세요! '{topic}' 관련해서 궁금해하신 내용 보내드릴게요 :) 어떤 상황이신지 편하게 말씀해주시면 제가 맞춤으로 답변 드릴게요!"
+DM_WELCOME_TEMPLATE = "안녕하세요! 문의 주셔서 감사해요 :) 어떤 게 궁금하신지 편하게 남겨주시면 확인 후 답변 드릴게요!"
+
+# secret 값은 wrangler.toml 에 쓰지 않는다 — 아래 명령으로 별도 등록:
+#   wrangler secret put META_ACCESS_TOKEN
+#   wrangler secret put META_APP_SECRET
+#   wrangler secret put WEBHOOK_VERIFY_TOKEN

@@ -50,6 +50,7 @@ class CardSet:
     slug: str
     cards: list[CardSpec] = field(default_factory=list)
     caption: str = ""
+    dm_keyword: str = ""
 
 
 # ----------------------------- LLM 호출 -----------------------------------
@@ -100,6 +101,7 @@ title 안에서 강조는 <em>...</em>, 줄바꿈은 <br> 만 허용 (그 외 HT
 {
   "topic": "...",
   "caption": "위 캡션 톤 지침에 맞는 인스타 캡션",
+  "dm_keyword": "cta 카드/캡션에서 쓴 것과 정확히 같은 키워드 (2~6자, 따옴표 없이)",
   "cards": [
     {
       "kind": "위 스토리 흐름의 카드 종류 중 하나 (정확히 지정된 값 사용)",
@@ -137,6 +139,9 @@ PROMPT_DM_CTA_RULES = """## 낚시(호기심 갭) + "댓글 키워드 또는 DM"
    (표시광고 규정 — 특정 상품 가입을 직접 권유하는 문구는 쓰지 않는다).
 3) 캡션 마지막 CTA 줄도 같은 원칙 — 카드 cta 에서 쓴 것과 같은 키워드로 "'키워드'
    댓글 또는 DM" 을 안내하되 표현은 카드와 캡션에서 서로 다르게 풀어써라.
+4) 출력 JSON 최상위 "dm_keyword" 필드에 이번 세트에서 쓴 키워드를 따옴표 없이
+   그대로 적어라 (카드/캡션에서 실제로 쓴 문구와 정확히 일치해야 함 — 댓글
+   자동응답 시스템이 이 필드로 새 댓글을 매칭한다).
 """
 
 _LEGACY_STORY_FLOW = """## 스토리 흐름 (결과 → 문제 → 해법 순)
@@ -287,6 +292,7 @@ def dummy_payload(topic: str, idx: int = 0) -> dict:
     cover_title = f"<em>{topic}</em>" if topic else "<em>보험 상담 화법</em>"
     return {
         "topic": topic,
+        "dm_keyword": "생각해볼게요",
         "caption": (
             "‘생각해볼게요’ 한마디로 끝나던 상담이 다음 약속으로 바뀐 한 멘트가 있어요 👇\n"
             "\n"
@@ -594,7 +600,8 @@ def payload_to_set(payload: dict) -> CardSet:
 
     topic = payload.get("topic", "보험 상담 화법")
     slug = re.sub(r"[^0-9A-Za-z가-힣]+", "-", topic).strip("-")[:40] or "set"
-    return CardSet(topic=topic, slug=slug, cards=specs, caption=payload.get("caption", ""))
+    return CardSet(topic=topic, slug=slug, cards=specs, caption=payload.get("caption", ""),
+                   dm_keyword=(payload.get("dm_keyword") or "").strip())
 
 
 # ----------------------------- 렌더링 ------------------------------------
@@ -730,6 +737,23 @@ def write_caption(captions_dir: Path, day: dt.date, slot: str, caption: str) -> 
     return p
 
 
+def write_dm_keyword(captions_dir: Path, day: dt.date, slot: str, topic: str,
+                      keyword: str) -> Path | None:
+    """댓글→DM 자동응답용 키워드 사이드카.
+
+    scheduler.py/publish_reel.py 가 발행 성공 후 이 파일을 읽어 media_id ↔
+    키워드 매핑을 Cloudflare KV 에 등록한다 (ig-webhook/ 의 Worker 가 새 댓글이
+    들어올 때 이 KV 를 조회해서 자동응답 트리거).
+    """
+    if not keyword:
+        return None
+    captions_dir.mkdir(parents=True, exist_ok=True)
+    p = captions_dir / f"{day.isoformat()}_{slot}.keyword.json"
+    p.write_text(json.dumps({"keyword": keyword, "topic": topic}, ensure_ascii=False),
+                 encoding="utf-8")
+    return p
+
+
 def generate_one(
     topic: str,
     day: dt.date,
@@ -769,9 +793,11 @@ def generate_one(
         title_font=title_font,
     )
 
-    write_caption(ROOT / cfg["paths"]["captions"], day, slot, card_set.caption)
+    captions_dir = ROOT / cfg["paths"]["captions"]
+    write_caption(captions_dir, day, slot, card_set.caption)
+    write_dm_keyword(captions_dir, day, slot, topic, card_set.dm_keyword)
     print(f"[OK] {day} {slot}  {len(card_set.cards)}장 ({topic}) "
-          f"[design={design_slug} font={title_font}] → {out}")
+          f"[design={design_slug} font={title_font} dm_keyword={card_set.dm_keyword!r}] → {out}")
     return card_set
 
 

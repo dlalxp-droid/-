@@ -16,6 +16,9 @@ name: Publish cardnews to Instagram
 #   IG_USER_ID
 #   CLOUDINARY_URL  (cloudinary://<api_key>:<api_secret>@<cloud_name>)
 #   NOTIFY_WEBHOOK_URL (선택)
+#   CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN (선택 — 댓글 키워드→DM
+#     자동응답용. 없으면 dm_registry.py 가 등록만 skip하고 발행은 정상 진행.
+#     ig-webhook/README.md 참고)
 
 on:
   schedule:
@@ -87,6 +90,9 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           set -u
           DATE="${{ steps.ctx.outputs.date }}"
